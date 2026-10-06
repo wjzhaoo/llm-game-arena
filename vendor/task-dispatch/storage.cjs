@@ -101,4 +101,3 @@ class Store {
   }
 }
 module.exports = { Store, atomic, StorageWriteError, read, id, sha, readableName, workspaceKey, desktopProjectId, overlaps, plainDirectory, alive };
-
