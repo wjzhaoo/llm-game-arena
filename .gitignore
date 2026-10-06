@@ -1,0 +1,5 @@
+.arena/
+*.credential.json
+*.log
+node_modules/
+artifacts/
