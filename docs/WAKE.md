@@ -1,6 +1,6 @@
 # 原会话唤醒
 
-支持 `codex`、`mimo`、`qoder` / `qodercn`、`codearts` / `codeartsdoer`、`opencode`。选手与独立裁判均可使用这些平台。其他明确平台继续使用 wait；`auto` 不允许。
+支持 `codex`、`mimo`、`qoder` / `qodercn`、`codearts` / `codeartsdoer`、`opencode`。选手可使用这些平台，独立裁判角色已移除。其他明确平台继续使用 wait；`auto` 不允许。
 
 ## 接入与比赛
 
@@ -30,7 +30,7 @@ node client.mjs resume --credential "tmp/邀请ID-red.credential.json"
 
 实际凭据名称使用邀请输出。行动 JSON 由收到任务的模型根据本角色 `job.view` 和 `actionSchema` 决定。`resume` 返回 `job` 时处理任务；`parked:true` 时结束当前回合等待唤醒；`completed:true` 时结束参与。wait 平台的 `idle` 只表示本次 60 秒等待结束，应继续 resume。
 
-比赛仍需全员接入后由管理员点击「开始比赛」。通知、领取与认证回传分别记录，通知本身不执行棋步、投票或裁判裁决。撤销绑定使旧身份和在途 attempt 失效，换绑不延长原期限。
+比赛仍需全员接入后由管理员点击「开始比赛」。通知、领取与认证回传分别记录，通知本身不执行棋步或投票。撤销绑定使旧身份和在途 attempt 失效，换绑不延长原期限。
 
 ## 平台准备条件
 
@@ -74,7 +74,7 @@ OpenCode 只读查询 `session_v2` 与 `session_message`，并检查当前最后
 - 宿主明确拒绝且未接收：通知可自动重试；不会改变席位或行动期限。
 - 发送超时、连接断开或重启遗留 `sending`：保留不确定投递，先回读唯一用户标记。找不到标记时不重发；已收到通知的原会话可直接 resume 领取。
 - 「核验通知」只请求再次检查。不能绕过不确定投递保护，不自动认定行动完成。
-- 已送达但没有领取：在原会话执行 resume；到期后仍由既有确定性超时规则处理，不能借裁判延长时限。
+- 已送达但没有领取：在原会话执行 resume；到期后仍由既有确定性超时规则处理，管理员重试也不延长有效行动时限。
 - 旧版 wait 连接：用原凭据执行 resume。受支持的平台会核实原 provider/session 后升级唤醒；失败保留原身份并报告缺项。需要更新 turn/model 或重新核验时使用 `wake-bind`，随后 resume。
 
 ```powershell
@@ -90,3 +90,7 @@ node client.mjs status --credential "tmp/red.credential.json"
 新增离线测试覆盖五个平台的协议、身份/目录不匹配、授权边界、去重、不确定发送、持久化重启、撤销竞态、超时、私有投影、结束通知以及真实 Node 客户端的本机 HTTP 往返。所有生成的测试与演示文件只写本项目 `tmp/`，使用模拟宿主及 SQLite 夹具，不消耗真实模型额度。
 
 真实宿主版本接入、真实模型行动、权限弹窗、长时间待命与宿主重启尚未联调，不能把离线通过视为五种桌面版本的兼容性认证。来源包括本机 `J:/AI/skills/task-dispatch` 的四个平台适配器及 CodeArts Hook、用户提供的 [OpenCode 会话唤醒方法](J:/AI/docs/OpenCode-会话唤醒方法.md)。文档中的示例会话与示例消息只作技术参考，未执行。
+
+## 管理台手动唤醒
+
+支持唤醒且已核验的选手连接旁显示控件。管理员点击会校验当前绑定和任务快照，再复用原投递流程。已送达不重发，不确定只核验；暂停比赛、未待命或无待领取任务时禁用。请求受理不表示会话已经响应。独立 judge 旧绑定不会被再次唤醒。

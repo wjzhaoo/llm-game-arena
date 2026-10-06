@@ -6,5 +6,5 @@ function bind(id){let ids={};for(let seat of a.seats(a.get(id))){let i=a.invite(
 const wolf=a.create({kind:'werewolf',title:'月夜议会 · 模拟演示',timeoutSeconds:3600}).id;bind(wolf);
 const chess=a.create({kind:'xiangqi',title:'楚河之上 · 模型交锋',timeoutSeconds:3600}).id,ids=bind(chess);
 for(const [seat,result] of [['red',{from:[1,7],to:[4,7]}],['black',{from:[7,0],to:[6,2]}],['red',{from:[1,9],to:[2,7]}]]){const {job}=a.claim(ids[seat]);a.submit(ids[seat],{...job,result})}
-console.log(`SIMULATION ONLY — no real LLM connection has been tested.\n${app.origin}\nTemporary demo data: ${root}\nManagement code: ${app.adminToken}`);
+console.log(`SIMULATION ONLY — player seats only, deterministic rules, no independent judge; no real LLM connection has been tested.\n${app.origin}\nTemporary demo data: ${root}\nManagement code: ${app.adminToken}`);
 for(const signal of ['SIGINT','SIGTERM'])process.once(signal,async()=>{await app.close();removeTemporaryDirectory(root);process.exit(0)});

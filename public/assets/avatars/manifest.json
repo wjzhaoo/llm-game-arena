@@ -1,0 +1,170 @@
+{
+  "schemaVersion": 1,
+  "reviewedAt": "2026-10-06",
+  "assetBase": "/assets/avatars/",
+  "defaultProvider": "default",
+  "providers": {
+    "codearts": {
+      "label": "CodeArts",
+      "src": "/assets/avatars/codearts.svg",
+      "asset": "assets/avatars/codearts.svg",
+      "kind": "initials-fallback",
+      "initials": "CA",
+      "source": null,
+      "license": "Original project text/geometry; no third-party logo copied",
+      "licenseUrl": null,
+      "licenseFile": null,
+      "referenceSources": [
+        "https://codearts.huaweicloud.com/index.html"
+      ],
+      "gap": "An official product page was verified, but a permissively licensed official logo repository or explicit reusable asset grant was not found in this review. Website visibility was not treated as copyright permission.",
+      "trademarkNote": "Neutral text label only. Provider names may be trademarks of their respective owners. No affiliation or endorsement is asserted.",
+      "sha256": "7bd774008e763719a663f3dd7810a0a980a656cbf1e22790c9aba10fdbe9e26c"
+    },
+    "codex": {
+      "label": "Codex",
+      "src": "/assets/avatars/codex.svg",
+      "asset": "assets/avatars/codex.svg",
+      "kind": "initials-fallback",
+      "initials": "CX",
+      "source": null,
+      "license": "Original project text/geometry; no third-party logo copied",
+      "licenseUrl": null,
+      "licenseFile": null,
+      "referenceSources": [
+        "https://github.com/openai/codex",
+        "https://github.com/openai/codex/blob/main/LICENSE",
+        "https://openai.com/brand/"
+      ],
+      "gap": "The complete current openai/codex tree has no Codex-product SVG mark. Its Apache-2.0 license covers repository materials; the OpenAI sample-skill blossom is not a Codex-product mark. No borrowed logo was used.",
+      "trademarkNote": "Neutral text label only. Provider names may be trademarks of their respective owners. No affiliation or endorsement is asserted.",
+      "sha256": "6a301cf2e18fac13f8795902794a0478294c170b6e1e2dd45d24d96fddc0ff00"
+    },
+    "cursor": {
+      "label": "Cursor",
+      "src": "/assets/avatars/cursor.svg",
+      "asset": "assets/avatars/cursor.svg",
+      "kind": "initials-fallback",
+      "initials": "CU",
+      "source": null,
+      "license": "Original project text/geometry; no third-party logo copied",
+      "licenseUrl": null,
+      "licenseFile": null,
+      "referenceSources": [
+        "https://cursor.com/brand",
+        "https://github.com/simple-icons/simple-icons/blob/develop/data/simple-icons.json",
+        "https://github.com/simple-icons/simple-icons/blob/develop/DISCLAIMER.md"
+      ],
+      "gap": "Cursor brand downloads and a Simple Icons drawing exist, but the Simple Icons Cursor entry has no individual license. The project CC0 license does not establish every brand icon copyright license; a neutral fallback is used conservatively.",
+      "trademarkNote": "Neutral text label only. Provider names may be trademarks of their respective owners. No affiliation or endorsement is asserted.",
+      "sha256": "07d2fe9a0ce9b26adbba8a4cdcea16373104616f1c99603b3bd4d1ec73418547"
+    },
+    "default": {
+      "label": "Unknown provider",
+      "src": "/assets/avatars/default.svg",
+      "asset": "assets/avatars/default.svg",
+      "kind": "initials-fallback",
+      "initials": "AI",
+      "source": null,
+      "license": "Original project text/geometry; no third-party logo copied",
+      "licenseUrl": null,
+      "licenseFile": null,
+      "referenceSources": [],
+      "gap": "Generic locally created initials; no third-party mark or provider identity is asserted.",
+      "trademarkNote": "Neutral text label only. Provider names may be trademarks of their respective owners. No affiliation or endorsement is asserted.",
+      "sha256": "fd84721b8d5e01d7d82aff44ac43a96cab8cae59d11adf528d3c9a99843ef443"
+    },
+    "mimo": {
+      "label": "MiMo",
+      "src": "/assets/avatars/mimo.svg",
+      "asset": "assets/avatars/mimo.svg",
+      "kind": "initials-fallback",
+      "initials": "MM",
+      "source": null,
+      "license": "Original project text/geometry; no third-party logo copied",
+      "licenseUrl": null,
+      "licenseFile": null,
+      "referenceSources": [
+        "https://github.com/XiaomiMiMo/MiMo-Code/blob/main/README.md",
+        "https://github.com/XiaomiMiMo/MiMo-Code/blob/main/LICENSE"
+      ],
+      "gap": "The official README separates MIT source code from MiMo name/logo/trademark terms. The separately referenced trademark policy was not resolved in this review; no logo license for this use was established.",
+      "trademarkNote": "Neutral text label only. Provider names may be trademarks of their respective owners. No affiliation or endorsement is asserted.",
+      "sha256": "75c502fb08f0056b9375f2e1d1da9ecfdc37ef4f1b95695708a863f46942df13"
+    },
+    "opencode": {
+      "label": "OpenCode",
+      "src": "/assets/avatars/opencode.svg",
+      "asset": "assets/avatars/opencode.svg",
+      "kind": "official-repository-logo",
+      "source": "https://github.com/anomalyco/opencode/blob/83802d800e1f05d8823f9e0a85cfaa580986d086/packages/identity/mark.svg",
+      "license": "MIT",
+      "licenseUrl": "https://github.com/anomalyco/opencode/blob/83802d800e1f05d8823f9e0a85cfaa580986d086/LICENSE",
+      "licenseFile": "assets/avatars/licenses/opencode-MIT.txt",
+      "copyright": "Copyright (c) 2025 opencode",
+      "licenseBasis": "Official repository root MIT license; identity directory has no separate license in the reviewed tree.",
+      "upstreamGitBlob": "157edc4d7522f38d3d34aff1317d304cb7958752",
+      "upstreamCommit": "83802d800e1f05d8823f9e0a85cfaa580986d086",
+      "sha256": "f9d33bb929cb3ebe30bbc44c0e74d2450aa2164581328462f9c58ebb492d60d0",
+      "changes": "Removed redundant outer SVG, unused xlink namespace and inert style block. Added accessible title. Original geometry and colors retained.",
+      "trademarkNote": "MIT covers the repository asset copyright; it is not a separate trademark grant. Use only to identify OpenCode, subordinate to the app branding. Do not imply OpenCode sponsorship or endorsement."
+    },
+    "qoder": {
+      "label": "Qoder",
+      "src": "/assets/avatars/qoder.svg",
+      "asset": "assets/avatars/qoder.svg",
+      "kind": "official-repository-logo",
+      "source": "https://github.com/QoderAI/Qoderian/blob/a450edfaaa5a27aa89d09b79a9590302b3d7b85d/src/assets/qoder-icon.svg",
+      "license": "MIT",
+      "licenseUrl": "https://github.com/QoderAI/Qoderian/blob/a450edfaaa5a27aa89d09b79a9590302b3d7b85d/LICENSE",
+      "licenseFile": "assets/avatars/licenses/qoder-MIT.txt",
+      "noticeFile": "assets/avatars/licenses/qoder-NOTICE.txt",
+      "noticeUrl": "https://github.com/QoderAI/Qoderian/blob/a450edfaaa5a27aa89d09b79a9590302b3d7b85d/NOTICE",
+      "copyright": "Copyright (c) 2026 Qoder; Copyright (c) 2025",
+      "licenseBasis": "Official QoderAI repository root MIT license; reviewed NOTICE excludes the bundled SDK from relicensing but does not exclude this local SVG.",
+      "upstreamGitBlob": "942cb847f71ecbafef7a3c1de978665a35c422fe",
+      "upstreamCommit": "a450edfaaa5a27aa89d09b79a9590302b3d7b85d",
+      "sha256": "84fa59972730d6a6608a6e1930b4ce36651185ce005ddff40c730c38c146f401",
+      "changes": "Added accessible title and resolved currentColor to default black for standalone img use. Original path geometry retained.",
+      "trademarkNote": "MIT covers the repository asset copyright; it is not a separate trademark grant. Use only to identify Qoder, subordinate to the app branding. Do not imply Qoder sponsorship or endorsement."
+    },
+    "vscode": {
+      "label": "Visual Studio Code",
+      "src": "/assets/avatars/vscode.svg",
+      "asset": "assets/avatars/vscode.svg",
+      "kind": "initials-fallback",
+      "initials": "VS",
+      "source": null,
+      "license": "Original project text/geometry; no third-party logo copied",
+      "licenseUrl": null,
+      "licenseFile": null,
+      "referenceSources": [
+        "https://code.visualstudio.com/brand"
+      ],
+      "gap": "Microsoft grants scoped icon uses such as tutorials and links to its website and restricts other app/branding associations. This arena-avatar use was not clearly covered, so no official icon is included.",
+      "trademarkNote": "Neutral text label only. Provider names may be trademarks of their respective owners. No affiliation or endorsement is asserted.",
+      "sha256": "a7b259458c5fa34592ebd3d94efb7ed9c323be655ee10a3a3fc04cc6ce145a60"
+    }
+  },
+  "aliases": {
+    "qodercn": "qoder",
+    "qoder-cn": "qoder",
+    "qoder.cn": "qoder",
+    "qoder cn": "qoder",
+    "open-code": "opencode",
+    "open code": "opencode",
+    "mimocode": "mimo",
+    "mimo-code": "mimo",
+    "mimo code": "mimo",
+    "visual studio code": "vscode",
+    "vs code": "vscode",
+    "vs-code": "vscode",
+    "unknown": "default",
+    "custom": "default",
+    "manual": "default",
+    "local": "default"
+  },
+  "notice": "Only OpenCode and Qoder use vetted official repository logos. All other known providers use explicitly labeled neutral initials. Names and trademarks belong to their respective owners; no affiliation or endorsement is implied.",
+  "security": "All avatar image URLs are selected from a fixed local allowlist. SVGs contain static vector/text elements only, with no scripts, CSS, event handlers, links, images, animation, external resources or embedded payloads.",
+  "usage": "Show a provider label beside each avatar. Preserve fallback kind in accessible text/tooltips. Keep the license and NOTICE files with redistributions. Never use these avatars as the app own logo."
+}

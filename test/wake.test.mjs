@@ -171,12 +171,12 @@ test('A hung host does not block another role; notification text and public view
  assert.ok(!publicView.includes('"phase":"wolf"'));
 });
 
-test('Timeout wakes the judge and sends one completion notice to parked participants', async t => {
+test('Timeout needs no judge and sends one completion notice to each parked participant', async t => {
  const f = fixture(t), id = f.arena.create({kind: 'xiangqi', timeoutSeconds: 10}).id, ids = await f.all(id); f.arena.start(id);
  f.clock.now += 11000; f.arena.tick(); await f.tick(); await f.tick();
  const ended = f.adapter.calls.filter(c => c.prompt.includes('本场比赛已结束'));
  assert.equal(ended.length, 2);
- assert.equal(f.adapter.calls.filter(c => c.binding.session === 'session-judge').length, 1);
+ assert.equal(f.adapter.calls.filter(c => c.binding.session === 'session-judge').length, 0);
  assert.equal((await f.wake.resume(ids.black)).completed, true);
  assert.equal(f.arena.get(id).bindings.black.armed, false);
 });
@@ -186,7 +186,7 @@ test('HTTP and actual CLI wake flow return parked promptly and protect managemen
  t.after(async () => { await app.close(); removeTemporaryDirectory(root); });
  const id = app.arena.create({kind: 'xiangqi'}).id;
  const files = {};
- for (const seat of ['red', 'black', 'judge']) {
+ for (const seat of ['red', 'black']) {
   const invite = app.arena.invite(id, seat, app.origin), credential = files[seat] = path.join(root, `${seat}.credential.json`);
   const result = await cli(process.execPath, ['client.mjs', 'connect', '--url', app.origin, '--match', id, '--seat', seat, '--invitation', invitationToken(invite), '--provider', 'opencode', '--session', `ses_http-${seat}`, '--out', credential]);
   const out = JSON.parse(result.stdout);
@@ -211,4 +211,44 @@ test('HTTP and actual CLI wake flow return parked promptly and protect managemen
  assert.equal(JSON.parse((await cli(process.execPath, ['client.mjs', 'resume', '--credential', files.red])).stdout).parked, true);
  await Promise.all(app.wake.tick());
  assert.equal(adapter.calls.at(-1).binding.session, 'ses_http-black');
+});
+
+test('Manual wake uses verified capability, stale-binding protection and one in-flight send', async t => {
+ const f=fixture(t),id=f.arena.create({kind:'xiangqi'}).id;await f.all(id);
+ let d=f.wake.diagnostics(id).find(x=>x.seat==='red');assert.equal(d.canWake,false);assert.match(d.blockedReason,/尚未开始/);
+ f.arena.start(id);d=f.wake.diagnostics(id).find(x=>x.seat==='red');assert.equal(d.canWake,true);
+ const request={match:id,seat:'red',bindingId:d.bindingId,attemptId:d.attemptId};
+ assert.throws(()=>f.wake.requestManual({...request,bindingId:'stale'}),/变化/);
+ assert.throws(()=>f.wake.requestManual({...request,attemptId:'stale'}),/变化/);
+ assert.equal(f.wake.requestManual(request).scheduled,true);assert.equal(f.wake.requestManual(request).duplicate,true);
+ await Promise.all(f.wake.inFlight.values());assert.equal(f.adapter.calls.length,1);
+ assert.equal(f.wake.requestManual(request).duplicate,true);assert.equal(f.adapter.calls.length,1);
+ d=f.wake.diagnostics(id).find(x=>x.seat==='red');assert.equal(d.status,'sent');assert.equal(d.canWake,false);
+ f.arena.revoke(id,'red');assert.throws(()=>f.wake.requestManual(request),/变化/);
+});
+
+test('Manual uncertain delivery only verifies and never resends; wait bindings cannot wake',async t=>{
+ const f=fixture(t),id=f.arena.create({kind:'xiangqi'}).id;await f.all(id);f.arena.start(id);
+ f.adapter.send=async()=>{f.adapter.calls.push('uncertain');throw Error('no confirmed receipt')};
+ const d=f.wake.diagnostics(id).find(x=>x.seat==='red'),request={match:id,seat:'red',bindingId:d.bindingId,attemptId:d.attemptId};
+ f.wake.requestManual(request);await Promise.all(f.wake.inFlight.values());assert.equal(f.wake.diagnostics(id).find(x=>x.seat==='red').status,'uncertain');
+ f.wake.requestManual(request);await Promise.all(f.wake.inFlight.values());assert.equal(f.adapter.calls.length,1);
+ const other=f.arena.create({kind:'xiangqi'}).id;for(const seat of f.arena.seats(f.arena.get(other)))await f.connect(other,seat,'simulated',`wait-${seat}`);f.arena.start(other);
+ const wait=f.wake.diagnostics(other).find(x=>x.seat==='red');assert.equal(wait.mode,'wait');assert.equal(wait.canWake,false);assert.throws(()=>f.wake.requestManual({match:other,seat:'red',bindingId:wait.bindingId,attemptId:wait.attemptId}),/轮询/);
+});
+
+test('HTTP manual wake validates administrator, binding snapshot, local static assets and no arbitrary target',async t=>{
+ const root=temporaryDirectory('arena-manual-http-'),adapter=host();
+ const app=await serve({port:0,root,adminToken:'manual-ui-test-only',wakeOptions:{workspace,adapters:{opencode:adapter}}});
+ t.after(async()=>{await app.close();removeTemporaryDirectory(root)});
+ const id=app.arena.create({kind:'xiangqi'}).id;
+ for(const seat of app.arena.seats(app.arena.get(id))){const invitation=app.arena.invite(id,seat,app.origin);await app.wake.connect({match:id,seat,provider:'opencode',session:'manual-'+seat,credentialPath:path.join(root,seat+'.credential.json'),invitation:invitationToken(invitation)})}
+ app.arena.start(id);const d=app.wake.diagnostics(id).find(x=>x.seat==='red');const body={match:id,seat:'red',bindingId:d.bindingId,attemptId:d.attemptId};
+ const post=(value,token='manual-ui-test-only')=>fetch(app.origin+'/api/wake-check',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify(value)});
+ assert.equal((await post(body,'wrong')).status,401);assert.equal((await post({...body,bindingId:'stale'})).status,400);
+ let response=await post(body);assert.equal(response.status,200);assert.equal((await response.json()).scheduled,true);await Promise.all(app.wake.inFlight.values());assert.equal(adapter.calls.length,1);
+ response=await post(body);assert.equal((await response.json()).duplicate,true);assert.equal(adapter.calls.length,1);
+ for(const route of ['/theme.js','/ui.js','/assets/avatars/manifest.json','/assets/avatars/qoder.svg']){response=await fetch(app.origin+route);assert.equal(response.status,200);assert.equal(response.headers.get('x-content-type-options'),'nosniff')}
+ response=await fetch(app.origin+'/assets/avatars/missing.svg');assert.equal(response.status,404);
+ response=await fetch(app.origin+'/assets/avatars/%2e%2e%2f%2e%2e%2fserver.mjs');assert.equal(response.status,404);
 });
