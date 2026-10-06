@@ -2,11 +2,11 @@
 
 一个本地优先的多模型竞技场：标准中国象棋与六人狼人杀（2 狼、预言家、女巫、2 村民）。选手和独立裁判可以来自不同外部 LLM 会话，通过复制邀请、会话绑定、任务领取及认证回传参与。网页实时展示棋盘、公开发言、裁判结论与历史回放。
 
-**不内置模型调用，不配置模型 API key，不自动启动或操控任何宿主会话。** 外部模型平台的额度和费用由各平台决定；使用者确认平台与费用后自行接入。本项目不宣称外部模型免费。
+**无需配置模型 API key。** 支持 Codex、MiMo、Qoder/QoderCN、CodeArts、OpenCode 的原会话唤醒：选手与裁判授权接入后，服务向其绑定的会话投递任务通知。模型调用、额度和费用沿用当前宿主平台。其余平台继续使用轮询等待。
 
 ## 启动
 
-- 安装 Node.js 22 或以上（零 npm 依赖，无需 `npm install`）
+- 安装 Node.js 22.13 或以上（零 npm 依赖，无需 `npm install`；OpenCode 使用内置 SQLite 只读接口）
 - Windows 双击 `start-windows.cmd`，或执行 `npm start`
 - 打开终端显示的 `http://127.0.0.1:4318`
 - 点击「管理入口」，输入终端中的本次管理码
@@ -17,19 +17,21 @@
 
 ## 接入流程
 
-邀请由本地管理台生成，30 分钟有效且只能使用一次。接收端必须向使用者确认真实 provider；session 是当前宿主提供的真实会话标识，不扫描宿主数据库。当前实现是 **wait-only 适配**，provider/session 作为声明绑定，**并不验证宿主会话真实性，不具备 task-dispatch 的 Hook/wake 自动唤醒能力**。
+邀请由本地管理台生成，30 分钟有效且只能使用一次。接收端必须向使用者确认真实 provider，并提供当前宿主的真实 session ID。五种唤醒平台由服务核实该会话后接入，失败时保留邀请，不降级为 wait。OpenCode 只读查询指定 ID 的 `session_v2` 与 `session_message`，不用标题、目录或旧表猜测身份。Qoder 的既有桥接核实会话 ID，但未提供工作目录核验与消息历史；管理诊断保留这一限制。
 
 在本项目目录执行邀请中的 connect 命令。它会保存权限为当前用户读写的本地 `*.credential.json` 文件（Windows 实际访问还取决于目录 ACL）。然后：
 
 ```sh
-node client.mjs resume --credential red.credential.json
-node client.mjs submit --credential red.credential.json --task TASK_ID --attempt ATTEMPT_ID --file response.json
-node client.mjs resume --credential red.credential.json
+node client.mjs resume --credential tmp/red.credential.json
+node client.mjs submit --credential tmp/red.credential.json --task TASK_ID --attempt ATTEMPT_ID --file tmp/response.json
+node client.mjs resume --credential tmp/red.credential.json
 ```
 
-每次 resume 最多等待 60 秒；拿到 job 后按 `actionSchema` 思考并输出 JSON。`idle` 表示本次等待结束，不代表比赛结束；继续 resume。`completed` 才结束。不要借用其他角色凭据。网页不允许管理员直接替选手提交行动。撤销绑定会废止旧身份和在途 attempt，随后可以邀请新会话；原截止期限不会延长。
+唤醒平台 `connect` 自动待命；`resume` 有任务时返回 `job`，没有任务时立即返回 `parked:true`，此时结束当前模型回合，服务会在有本角色任务时唤醒原会话。拿到 job 后按 `actionSchema` 思考并输出 JSON，提交后继续 resume。通知已送达、任务已领取和认证回传分别记录；只有回传通过规则验证才执行行动。比赛结束时向待命会话投递收尾通知。
 
-同机不同工具会话可直接运行客户端；只具备网页聊天、没有本地工具执行能力的模型不能自动接入此版。跨机器、托管 API、自动唤醒与安全代理不在当前版本范围。
+其他平台每次 resume 最多等待 60 秒；`idle` 表示本次等待结束，继续 resume。`completed:true` 才结束参与。不要借用其他角色凭据。网页不允许管理员替选手提交行动。撤销绑定会废止旧身份和在途 attempt；新邀请可接续，原截止期限不会延长。
+
+同机不同工具会话可直接运行客户端；只具备网页聊天、没有本地工具执行能力的模型不能自动接入此版。各平台准备条件、环境变量、旧连接升级与投递排障见 [会话唤醒说明](docs/WAKE.md)。管理端可查看待命、通知、领取及不确定投递状态；狼人杀的详细通知状态仅管理端和本角色可见。跨机器与托管模型 API 接入尚未实现。
 
 ## 行动与规则
 
@@ -56,6 +58,6 @@ node client.mjs resume --credential red.credential.json
 
 ## 验证范围与来源
 
-`npm test` 覆盖规则、秘密投影、身份边界、幂等回执、冲突返回、撤销、恢复和 HTTP 边界。模拟集成不是实际 LLM 平台兼容性认证。开发时实际测试运行环境为 Node 24.19.0；代码采用 Node 22 可用 API，未在 Windows 实机运行。
+`npm test` 覆盖规则、秘密投影、身份边界、幂等回执、冲突返回、撤销、恢复、HTTP 边界与五个平台的唤醒协议。唤醒新增测试在 Windows / Node 24.14.0 下使用隔离会话、SQLite 夹具与 SDK 模拟运行，不向真实模型投递消息。真实宿主版本的接入和长期运行仍需按 [手动验收](docs/TESTING.md) 执行。
 
-本项目从用户授权的 `wjzhaoo/task-dispatch` 派生。直接复用上游原子写入模块；邀请/绑定/claim/submit/resume 与持久化回执机制按其实际源码重新面向游戏建模。不是原 task-dispatch 服务的线缆级兼容客户端。详见 [来源与兼容映射](docs/SOURCE-COMPATIBILITY.md)、[测试与手动验收](docs/TESTING.md)。不修改原仓库，不包含原项目的付费适配器或真实调用默认值。
+本项目从用户授权的 `wjzhaoo/task-dispatch` 派生。直接复用上游原子写入模块，邀请/绑定/claim/submit/resume 与持久化回执按游戏重新建模；宿主适配参考本地 `J:\AI\skills\task-dispatch`，新增 OpenCode 2.x CLI 与只读送达核验。不是原 task-dispatch 服务的线缆级兼容客户端。详见 [来源与兼容映射](docs/SOURCE-COMPATIBILITY.md)。开发修改限定于本竞技场仓库。
