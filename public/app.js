@@ -1,58 +1,337 @@
-const $=id=>document.getElementById(id);let current=null,match=null,admin=sessionStorage.getItem('arenaAdmin')||'',replay=null;
-let invitationRequest=0;
-let avatarManifest={},selectedCell=null,boardContext='';const wakeRequests=new Set();
-$('themePreference').value=ArenaTheme.preference;$('themePreference').onchange=event=>ArenaTheme.set(event.target.value);
-document.addEventListener('error',event=>{if(event.target instanceof HTMLImageElement&&event.target.classList.contains('avatar-image')){event.target.hidden=true;event.target.previousElementSibling?.setAttribute('aria-hidden','false')}},true);
-const seatTitle=seat=>seat==='red'?'红方选手':seat==='black'?'黑方选手':`${seat} 号选手`;
-const KIND_LABEL={xiangqi:'中国象棋',blind:'覆棋盲棋',werewolf:'六人狼人杀'};
-function invitationPrompt(invitation){
- const seat=invitation.seat;if(seat==='judge')throw Error('此版本不再接受独立裁判邀请');const name=seatTitle(seat),commands=invitation.text.split('\n').filter(line=>line.startsWith('node client.mjs connect '));
- if(commands.length!==1||!commands[0].includes(`--seat ${seat} `))throw Error('邀请内容与选手不匹配，请关闭弹窗后重试');
- const credential=`tmp/${invitation.invitationId}-${seat}.credential.json`,response=`tmp/${invitation.invitationId}-${seat}-response.json`;
- const command=commands[0].replace(/--out \S+$/,`--out "${credential}"`);
- const action=`你只代表${name}（${seat}）。确认 job.seat 是 ${seat}，依据自己的 job.view 和 actionSchema 逐步思考，只提交自己的行动，不代替其他选手操作。合法性与胜负由规则引擎决定。`;
- return `[LLM-GAME-INVITE:${invitation.invitationId}]\n本邀请仅供${name}（${seat}）使用。参加既有比赛，不创建开发任务。\n${action}\n先确认真实平台和当前宿主提供的真实会话标识，不猜测、不编造、不按标题或目录选择会话。支持 codex、mimo、qoder（含 qodercn）、codearts、opencode 原会话唤醒；其他明确平台使用 wait。接入表示允许竞技场向本会话投递后续任务通知，额度与费用沿用当前平台。用户授权后，在包含 client.mjs 的竞技场项目目录执行：\n${command}\nCodex 可在显式选择 codex 后使用当前 CODEX_THREAD_ID；无法取得真实回合 ID 时追加 --turn-id <真实当前回合ID>。MiMo 无法读取既有模型时追加 --model <已确认provider/model>。OpenCode 必须使用真实 ses_ 会话 ID，服务只读核实该会话。\n连接后执行：\nnode client.mjs resume --credential "${credential}"\n收到自己的 job 后，将自己决定的行动 JSON 保存为 "${response}"（UTF-8 无 BOM），然后执行：\nnode client.mjs submit --credential "${credential}" --task <本次taskId> --attempt <本次attemptId> --file "${response}"\n提交后继续 resume。parked:true 时结束当前回合，服务会在有任务时唤醒原会话；idle 时继续 resume；completed:true 才表示比赛结束。通知送达不代表任务完成。不要自行编写自动对弈脚本，不向自己或其他会话转发，不修改项目源码，不公开邀请、凭据或私有信息。邀请 30 分钟有效且仅可使用一次。`;
+const $=id=>document.getElementById(id);
+const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const memory=new Map();
+function stored(key){return memory.get(key)||null}
+function save(key,value){if(value===null)memory.delete(key);else memory.set(key,value)}
+// Remove only this application's legacy data; never restore browser-stored identities.
+try{
+ for(let i=sessionStorage.length-1;i>=0;i--){
+  const key=sessionStorage.key(i);
+  if(key==='arenaAdmin'||key?.startsWith('arenaPlayer:')||key?.startsWith('arenaJoin:'))sessionStorage.removeItem(key);
+ }
+}catch{}
+const initialUrl=new URL(location.href);
+let current=initialUrl.searchParams.get('room'),match=null,admin='',replay=null;
+const validAuthToken=value=>typeof value==='string'&&/^[\x21-\x7e]+$/.test(value);
+const adminFormatMessage='管理码格式无效，请只复制终端中的管理码，不含中文说明、全角字符或空格';
+let playerData=null,humanJob=null,selectedCell=null,boardContext='',panelContext='',refreshing=false,submitting=false,clockOffset=0;
+let invitationRequest=0,invitationSeat=null,avatarManifest={},network={localOrigin:location.origin,lanOrigins:[]},autoJoin=true;
+const wakeRequests=new Set(),roomInvites=new Map();
+if(current&&new URLSearchParams(initialUrl.hash.slice(1)).has('join')){
+ save('arenaJoin:'+current,new URLSearchParams(initialUrl.hash.slice(1)).get('join'));
+ history.replaceState(null,'',initialUrl.pathname+initialUrl.search);
 }
-async function participantAction(button){
- manage();const room=current,seat=button.dataset.seat;
- if(button.dataset.bound==='true'){if(!confirm('撤销此角色绑定？旧凭据与在途回传将失效，行动期限不延长。'))return;await api('/api/revoke',{match:room,seat},true);await refresh();return}
- const request=++invitationRequest;$('inviteTitle').textContent=`${seatTitle(seat)} · 接入邀请`;$('inviteTarget').textContent=`仅发送给${seatTitle(seat)}（${seat}）的模型会话。本弹窗只显示该席位的提示词。`;
- $('inviteText').value='';$('copyInvite').disabled=true;$('copyInvite').textContent='复制邀请';$('inviteDialog').querySelector('[data-notice]').textContent='';$('inviteDialog').showModal();
- const invitation=await api('/api/invite',{match:room,seat},true);
+const seatTitle=seat=>seat==='red'?'红方选手':seat==='black'?'黑方选手':seat.replace(/^p/,'')+' 号选手';
+const kinds={xiangqi:'中国象棋',blind:'覆棋盲棋',werewolf:'六人狼人杀'};
+function credential(){try{return JSON.parse(stored('arenaPlayer:'+current)||'null')}catch{return null}}
+function selectRoom(id){
+ current=id;
+ const url=new URL(location.href);url.searchParams.set('room',id);url.hash='';
+ history.replaceState(null,'',url.pathname+url.search);
+}
+function shareBase(){return $('shareAddress').value||network.lanOrigins[0]||network.localOrigin}
+function notify(value){
+ const messages={'Admin authorization required':'管理码无效，请在管理入口重新输入本次管理码','All players must connect first':'请等待全部选手接入后再开始比赛','Unauthorized':'席位凭据已失效，请重新加入','Binding revoked':'连接已被房主撤销，请重新加入','Stale attempt or foreign session':'棋局或任务已更新，请刷新后重试','Match paused; administrator must resume':'比赛已暂停，请等待房主继续','Conflicting durable receipt':'该行动已提交其他结果，请刷新当前对局'};
+ const message=messages[value]||value;
+ $('notice').textContent=message;
+ for(const notice of document.querySelectorAll('dialog [data-notice]'))notice.textContent=notice.closest('dialog').open?message:'';
+}
+async function api(path,body,auth=false,token){
+ const bearer=token||(auth?admin:'');
+ if(bearer&&!validAuthToken(bearer)){
+  const error=Error(auth?adminFormatMessage:'席位凭据格式无效，请重新加入');error.status=401;throw error;
+ }
+ const response=await fetch(path,{method:body?'POST':'GET',headers:{...(body?{'Content-Type':'application/json'}:{}),...(bearer?{Authorization:'Bearer '+bearer}:{})},...(body?{body:JSON.stringify(body)}:{})});
+ const out=await response.json();
+ if(!response.ok){const error=Error(out.error);error.status=response.status;throw error}
+ return out;
+}
+async function safe(fn){try{await fn()}catch(error){notify(error.message)}}
+function manage(){if(!admin){$('adminDialog').showModal();throw Error('请先输入启动终端中的管理码')}return true}
+function selectCopyField(input){
+ input.focus({preventScroll:true});input.select();input.setSelectionRange(0,input.value.length);
+ return document.activeElement===input&&input.selectionStart===0&&input.selectionEnd===input.value.length;
+}
+async function copyText(value,source){
+ if(navigator.clipboard?.writeText){try{await navigator.clipboard.writeText(value);return}catch{}}
+ if(source&&(!source.isConnected||source.value!==value))throw Error('内容已更新，请复制当前邀请');
+ const existing=source?.isConnected&&source.value===value,input=existing?source:document.createElement('textarea');
+ if(!existing){
+  input.value=value;input.readOnly=true;input.style.position='fixed';input.style.top='0';input.style.opacity='0';
+  const dialog=document.activeElement?.closest('dialog')||document.querySelector('dialog[open]');
+  (dialog?.open?dialog:document.body).append(input);
+ }
+ let selected=false,copied=false;
+ try{selected=selectCopyField(input);if(selected)copied=document.execCommand('copy')}catch{}
+ finally{if(!existing)input.remove()}
+ if(!copied)throw Error(existing&&selected?'自动复制未成功，已选中完整内容，请按 Ctrl+C（Mac 用 ⌘C）手动复制':'自动复制未成功，请点击文本，按 Ctrl+A、Ctrl+C（Mac 用 ⌘A、⌘C）手动复制');
+}
+async function copyField(button,input,isCurrent=()=>true){
+ const text=input.value;if(!text||button.disabled)return;
+ button.disabled=true;button.textContent='复制中…';
+ const active=()=>isCurrent()&&input.value===text;
+ try{await copyText(text,input);if(active()){button.textContent='已复制';notify('内容已复制到剪贴板')}}
+ catch(error){if(active()){button.textContent='重试复制';notify(error.message)}}
+ finally{if(active())button.disabled=false}
+}
+async function getRoomInvite(){
+ manage();if(!current)throw Error('请先创建房间');
+ let result=roomInvites.get(current);
+ if(!result||result.expiresAt<=Date.now()){result=await api('/api/room-invite',{match:current,base:shareBase()},true);roomInvites.set(current,result)}
+ const url=new URL(result.url);url.host=new URL(shareBase()).host;return {...result,url:url.href};
+}
+function joinOptions(){
+ const chosen=$('humanSeat').value;
+ const seats=(match?.participants||[]).filter(p=>p.type==='human'&&!p.connected);
+ $('humanSeat').innerHTML=seats.map(p=>'<option value="'+esc(p.seat)+'">'+seatTitle(p.seat)+'</option>').join('');
+ if(seats.some(p=>p.seat===chosen))$('humanSeat').value=chosen;
+ $('joinHuman').disabled=!seats.length;
+}
+async function openJoin(){
+ if(!current||!match)throw Error('请先选择房间');
+ if(credential())throw Error('你已在本房间入座，请使用下方真人操作区');
+ if(!stored('arenaJoin:'+current)){
+  const invitation=await getRoomInvite();
+  save('arenaJoin:'+current,new URL(invitation.url).hash.slice('#join='.length));
+ }
+ joinOptions();$('joinDialog').showModal();
+ if(!$('humanSeat').options.length)notify('暂无空闲真人席位，请让房主在开局前设置选手类型');
+}
+function invitationPrompt(invitation){
+ if(invitation.seat!==invitationSeat||!['red','black','p1','p2','p3','p4','p5','p6'].includes(invitation.seat))throw Error('邀请返回了不同的席位');
+ return '本邀请仅供'+seatTitle(invitation.seat)+'（'+invitation.seat+'）使用。\n'+invitation.text;
+}
+async function loadInvitation(){
+ const request=++invitationRequest,room=current,seat=invitationSeat;
+ $('inviteText').value='';$('copyInvite').disabled=true;$('copyInvite').textContent='复制邀请';notify('');
+ const invitation=await api('/api/invite',{match:room,seat,wakeTransport:$('inviteTransport').value,base:shareBase()},true);
  if(request!==invitationRequest||current!==room||!$('inviteDialog').open)return;
- if(invitation.seat!==seat)throw Error('邀请返回了不同的席位，请关闭弹窗后重试');
  $('inviteText').value=invitationPrompt(invitation);$('copyInvite').disabled=false;
 }
-$('inviteDialog').addEventListener('close',()=>{invitationRequest++;$('inviteText').value='';$('copyInvite').disabled=true});
-const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-async function api(path,body,auth=false){const r=await fetch(path,{method:body?'POST':'GET',headers:{...(body?{'Content-Type':'application/json'}:{}),...(auth?{Authorization:`Bearer ${admin}`}:{})},...(body?{body:JSON.stringify(body)}:{})});const j=await r.json();if(!r.ok)throw Error(j.error);return j}
-function notify(x){const messages={'Admin authorization required':'管理码无效，请在管理入口重新输入本次管理码','All players must connect first':'请等待全部选手接入后再开始比赛'};const message=messages[x]||x;$('notice').textContent=message;for(const notice of document.querySelectorAll('dialog [data-notice]'))notice.textContent=notice.closest('dialog').open?message:''}
-async function safe(fn){try{await fn();}catch(e){notify(e.message)}}
-function manage(){if(!admin){$('adminDialog').showModal();throw Error('请先输入启动终端中的管理码')}return true}
-for(const b of document.querySelectorAll('[data-close]'))b.onclick=()=>$(b.dataset.close).close();
-$('adminButton').onclick=()=>$('adminDialog').showModal();$('saveAdmin').onclick=()=>{admin=$('adminCode').value.trim();sessionStorage.setItem('arenaAdmin',admin);$('adminCode').value='';$('adminDialog').close();notify('管理码已保存到当前标签页')};
-$('newButton').onclick=()=>safe(async()=>{manage();$('createDialog').showModal()});
-$('create').onclick=()=>safe(async()=>{const b=$('create');b.disabled=true;try{const m=await api('/api/matches',{kind:$('kind').value,title:$('roomTitle').value,timeoutSeconds:Number($('timeout').value)},true);current=m.id;replay=null;$('createDialog').close();notify('房间已创建，请为每位选手分别复制邀请');await refresh()}finally{b.disabled=false}});
-$('startButton').onclick=()=>safe(async()=>{manage();if(!current)throw Error('请先创建房间');await api('/api/start',{match:current},true);notify('比赛已开始');await refresh()});
-$('pauseButton').onclick=()=>safe(async()=>{manage();if(!current)return;await api('/api/control',{match:current,action:match.paused?'resume':'pause'},true);await refresh()});
-$('endButton').onclick=()=>safe(async()=>{manage();if(!current||!confirm('结束本场比赛？会保留现有记录，并取消未完成行动。不会指定赢家或伪造棋步。'))return;await api('/api/control',{match:current,action:'end'},true);await refresh()});
-$('reveal').onchange=()=>safe(async()=>{if($('reveal').checked&&!admin){$('reveal').checked=false;manage()}replay=null;await refresh()});
-$('copyInvite').onclick=()=>safe(async()=>{const request=invitationRequest,text=$('inviteText').value;if(!text||$('copyInvite').disabled)return;await navigator.clipboard.writeText(text);if(request===invitationRequest&&$('inviteDialog').open)$('copyInvite').textContent='已复制'});
-$('replay').oninput=()=>{replay=Number($('replay').value);render()};$('backLive').onclick=()=>{replay=null;render()};
-async function refresh(){let rooms=await api('/api/matches');if(!current&&rooms.length)current=rooms.at(-1).id;$('matches').innerHTML=rooms.slice().reverse().map(m=>`<button class="room ${current===m.id?'active':''}" data-id="${esc(m.id)}"><strong>${esc(m.title)}</strong><small>${KIND_LABEL[m.kind]||m.kind} · ${m.status==='finished'?'已结束':m.started?'进行中':'待接入'}</small></button>`).join('');for(let b of $('matches').querySelectorAll('button'))b.onclick=()=>safe(async()=>{current=b.dataset.id;replay=null;$('reveal').checked=false;await refresh()});if(current){match=await api('/api/matches/'+current+($('reveal').checked?'?reveal=1':''),null,$('reveal').checked);match.connections=admin?await api('/api/matches/'+current+'/connections',null,true).catch(()=>[]):[];match.admin=admin?await api('/api/matches/'+current+'/admin',null,true).catch(()=>null):null;render()}}
-function connectionText(participant){
- if(!participant.connected)return '等待会话接入';
- const mode=participant.continuationMode==='wake'?'会话唤醒':'轮询等待';
- const connection=(match.connections||[]).find(c=>c.seat===participant.seat);
- const scope=connection?.verified&&connection.workspaceVerified===false?' · 仅核实会话 ID':'';
- const labels={connected:'已连接',parked:'待命',pending:'待通知',sending:'通知中',sent:connection?.completion?'结束通知已送达':'已送达，待领取',claimed:'已领取',uncertain:'送达待核实',completed:'已结束'};
- return `${participant.provider} · ${mode}${scope}${connection?' · '+(labels[connection.status]||'待连接'):''}`;
+async function participantAction(button){
+ const seat=button.dataset.seat,p=match.participants.find(p=>p.seat===seat);
+ if(p.connected){
+  manage();if(!confirm('撤销此选手连接？旧凭据与在途回传将失效，行动期限不延长。'))return;
+  await api('/api/revoke',{match:current,seat},true);await refresh();return;
+ }
+ if(p.type==='human'){await openJoin();$('humanSeat').value=seat;return}
+ manage();invitationSeat=seat;
+ $('inviteTitle').textContent=seatTitle(seat)+' · AI 接入邀请';
+ $('inviteTarget').textContent='仅发送给此席位的模型会话。局域网模板在 AI 自己的电脑核验并唤醒原会话。';
+ $('copyInvite').textContent='复制邀请';$('inviteDialog').showModal();await loadInvitation();
 }
-function render(){if(!match)return;const focused=document.activeElement,focusedCell=focused?.dataset?.cell,focusedTarget=focused?.dataset?.target;let g=replay===null?match.game:(match.history[replay]?.game||match.game);$('title').textContent=match.title;$('subtitle').textContent=match.kind==='xiangqi'?'楚河汉界 · 标准中国象棋 · 确定性规则校验':match.kind==='blind'?'覆棋暗战 · 暗子混洗 · 走一步揭开 · 异色易主 · 吃将制':'月夜议会 · 2 狼 / 预言家 / 女巫 / 2 村民';$('status').textContent=match.paused?'管理员已暂停':g.status==='finished'?`已结束 · ${g.winner||'平局'}`:match.started?'正在进行':'等待选手';$('gameKind').textContent={xiangqi:'XIANGQI 象棋',blind:'BLIND 覆棋',werewolf:'WEREWOLF 狼人杀'}[match.kind]||match.kind.toUpperCase();$('phase').textContent=match.kind==='werewolf'?`第 ${g.round||1} 轮 · ${{night:'夜间行动',wolf:'狼人行动',seer:'预言家行动',witch:'女巫行动',discuss:'白天讨论',vote:'放逐投票'}[g.phase]||g.phase}`:`${g.turn==='red'?'红方':'黑方'}行棋 · 第 ${g.ply||0} 手`;$('live').textContent=replay===null?'● LIVE':'◷ REPLAY';$('startButton').disabled=match.started;$('pauseButton').disabled=!admin||!match.started||match.game.status==='finished';$('pauseButton').textContent=match.paused?'继续比赛':'暂停比赛';$('endButton').disabled=!admin||match.game.status==='finished';$('replay').max=Math.max(0,match.history.length-1);$('replay').value=replay===null?Math.max(0,match.history.length-1):replay;$('replayLabel').textContent=replay===null?`实时 · ${match.history.length} 条历史记录`:`回放 ${replay+1}/${match.history.length} · ${match.history[replay]?.text||''}`;
- let warning=$('reveal').checked&&replay===null?'<div class="reveal-warning">管理全知视图 · 包含隐藏信息，勿向选手分享</div>':'';
- if(match.kind==='xiangqi'||match.kind==='blind'){const context=`${current}:${replay}:${g.ply}`;if(context!==boardContext){selectedCell=null;boardContext=context}$('board').innerHTML=ArenaUI.chess(g,selectedCell);for(const button of $('board').querySelectorAll('[data-cell]'))button.onclick=()=>{const cell=button.dataset.cell.split(',').map(Number);selectedCell=selectedCell?.join(',')===cell.join(',')?null:cell;render()};for(const button of $('board').querySelectorAll('[data-target]'))button.onclick=()=>{$('boardInstruction').textContent=`目标 ${button.dataset.target}：仅展示规则引擎提供的合法着法，不执行或提交棋步`};$('board').onkeydown=event=>{if(event.key==='Escape'){selectedCell=null;render()}};if(focusedCell)$('board').querySelector(`[data-cell="${focusedCell}"]`)?.focus({preventScroll:true});else if(focusedTarget)$('board').querySelector(`[data-target="${focusedTarget}"]`)?.focus({preventScroll:true})}
- else{const players=g.players||g.seats||[];let a=Array.isArray(players)?players:Object.entries(players).map(([id,p])=>({id,...p}));$('board').innerHTML=warning+`<div class="night-banner">${['night','wolf','seer','witch'].includes(g.phase)?'天黑请闭眼 · 私有行动仅发送给对应角色':'天亮了 · 请根据公开线索讨论与投票'}<br>普通观战不显示角色、夜间目标或验人结果</div><div class="wolves">${a.map((p,i)=>`<div class="seat-card ${p.alive===false?'dead':''}"><div class="seat-avatar">${ArenaUI.avatar(match.participants.find(player=>player.seat===(p.id||p.seat))?.provider,avatarManifest)}</div><strong>${esc(p.id||p.seat||'p'+(i+1))} 号玩家</strong><small>${esc(p.role||'身份隐藏')} · ${p.alive===false?'已出局':'存活'}</small></div>`).join('')}</div>`}
- $('count').textContent=`${match.participants.filter(p=>p.connected).length} / ${match.participants.length}`;$('players').innerHTML=match.participants.map(p=>{const connection=(match.connections||[]).find(c=>c.seat===p.seat),wakeControl=ArenaUI.wakeControl(connection,wakeRequests.has(current+':'+p.seat));return `<div class="player">${ArenaUI.avatar(p.provider,avatarManifest)}<div class="player-meta"><strong>${seatTitle(p.seat)}</strong><small>${esc(connectionText(p))}</small>${connection?.error?`<small title="${esc(connection.error)}">${esc(connection.error)}</small>`:''}</div><div class="participant-actions">${wakeControl?`<button class="wake-button" data-wake-seat="${esc(p.seat)}" ${wakeControl.disabled?'disabled':''} title="${esc(wakeControl.reason)}" aria-label="${esc(wakeControl.label+'，'+wakeControl.reason)}">${esc(wakeControl.label)}</button>${wakeControl.disabled&&wakeControl.reason?`<small class="wake-reason">${esc(wakeControl.reason)}</small>`:''}`:''}<button data-seat="${esc(p.seat)}" data-bound="${p.connected}">${p.connected?'撤销':'邀请'}</button></div></div>`}).join('');for(let b of $('players').querySelectorAll('[data-seat]'))b.onclick=()=>safe(()=>participantAction(b));for(let b of $('players').querySelectorAll('[data-wake-seat]'))b.onclick=()=>safe(async()=>{manage();const room=current,seat=b.dataset.wakeSeat,key=room+':'+seat,connection=(match.connections||[]).find(c=>c.seat===seat);if(wakeRequests.has(key)||!connection?.canWake)return;wakeRequests.add(key);render();try{const result=await api('/api/wake-check',{match:room,seat,bindingId:connection.bindingId,attemptId:connection.attemptId},true);if(current===room)notify(result.message)}finally{wakeRequests.delete(key);await refresh()}});
- $('adminTasks').hidden=!match.admin;const tasks=match.admin?.tasks||[];$('taskList').innerHTML=tasks.length?tasks.map(task=>`<div class="admin-task"><span>${esc(task.message||task.kind||'系统异常')}<small>${esc(({pending:'待处理',retried:'已允许重试',resolved:'已解决',closed:'已关闭'})[task.status]||'待处理')}</small></span>${task.canRetry?`<button data-retry-task="${esc(task.id)}">允许一次重试</button>`:''}</div>`).join(''):'<p class="muted">暂无系统异常待办</p>';for(const b of $('taskList').querySelectorAll('[data-retry-task]'))b.onclick=()=>safe(async()=>{manage();b.disabled=true;try{await api('/api/control',{match:current,action:'retry',taskId:b.dataset.retryTask},true)}finally{await refresh()}});
- const events=replay===null?match.events:match.history.slice(0,replay+1);$('events').innerHTML=events.slice().reverse().map(e=>`<div class="event ${esc(e.type)}"><time>${new Date(e.at).toLocaleTimeString('zh-CN',{hour12:false})}</time><span>${esc(e.text)}</span></div>`).join('')}
-safe(async()=>{try{avatarManifest=await api('/assets/avatars/manifest.json')}catch{avatarManifest={}}await refresh()});setInterval(()=>safe(refresh),2000);
+$('themePreference').value=ArenaTheme.preference;
+$('themePreference').onchange=event=>ArenaTheme.set(event.target.value);
+document.addEventListener('error',event=>{if(event.target instanceof HTMLImageElement&&event.target.classList.contains('avatar-image')){event.target.hidden=true;event.target.previousElementSibling?.setAttribute('aria-hidden','false')}},true);
+for(const button of document.querySelectorAll('[data-close]'))button.onclick=()=>$(button.dataset.close).close();
+$('adminButton').onclick=()=>$('adminDialog').showModal();
+$('saveAdmin').onclick=()=>safe(async()=>{
+ const button=$('saveAdmin'),value=$('adminCode').value.trim();button.disabled=true;
+ try{
+  if(!value)throw Error('请填写启动终端显示的本次管理码');
+  if(!validAuthToken(value))throw Error(adminFormatMessage);
+  await api(current?'/api/matches/'+encodeURIComponent(current)+'/admin':'/api/admin',null,true,value);
+  admin=value;$('adminCode').value='';$('adminDialog').close();notify('管理码验证通过，仅当前页面有效');await refresh();
+ }finally{button.disabled=false}
+});
+$('newButton').onclick=()=>safe(async()=>{manage();$('createDialog').showModal()});
+$('create').onclick=()=>safe(async()=>{
+ const button=$('create');button.disabled=true;
+ try{
+  const room=await api('/api/matches',{kind:$('kind').value,title:$('roomTitle').value,timeoutSeconds:Number($('timeout').value)},true);
+  selectRoom(room.id);replay=null;playerData=null;humanJob=null;autoJoin=false;$('createDialog').close();
+  notify('房间已创建，请在选手旁选择真人或 AI，并分别邀请接入');await refresh();
+ }finally{button.disabled=false}
+});
+$('startButton').onclick=()=>safe(async()=>{manage();await api('/api/start',{match:current},true);notify('比赛已开始');await refresh()});
+$('pauseButton').onclick=()=>safe(async()=>{manage();await api('/api/control',{match:current,action:match.paused?'resume':'pause'},true);await refresh()});
+$('endButton').onclick=()=>safe(async()=>{manage();if(!confirm('结束本场比赛？记录会保留，未完成行动会取消。'))return;await api('/api/control',{match:current,action:'end'},true);await refresh()});
+$('reveal').onchange=()=>safe(async()=>{if($('reveal').checked&&!admin){$('reveal').checked=false;manage()}replay=null;await refresh()});
+$('inviteTransport').onchange=()=>safe(loadInvitation);
+$('inviteDialog').addEventListener('close',()=>{invitationRequest++;$('inviteText').value='';$('copyInvite').disabled=true});
+$('copyInvite').onclick=()=>{const request=invitationRequest;return safe(()=>copyField($('copyInvite'),$('inviteText'),()=>request===invitationRequest&&$('inviteDialog').open))};
+$('shareRoom').onclick=()=>safe(async()=>{
+ const result=await getRoomInvite();$('roomLink').value=result.url;
+ try{await copyText(result.url);notify('房间邀请已复制，朋友打开后可选择空闲真人席位')}
+ catch{$('copyRoomLink').textContent='复制链接';$('copyRoomLink').disabled=false;$('shareDialog').showModal();selectCopyField($('roomLink'));notify('自动复制未成功，已选中房间链接，请按 Ctrl+C（Mac 用 ⌘C）手动复制')}
+});
+$('copyRoomLink').onclick=()=>safe(()=>copyField($('copyRoomLink'),$('roomLink'),()=>$('shareDialog').open));
+$('joinHuman').onclick=()=>safe(async()=>{
+ const button=$('joinHuman');button.disabled=true;
+ try{
+  const room=current,out=await api('/api/player',{action:'join',match:room,seat:$('humanSeat').value,nickname:$('nickname').value,invitation:stored('arenaJoin:'+room)});
+  save('arenaPlayer:'+room,JSON.stringify(out));$('joinDialog').close();$('reveal').checked=false;replay=null;humanJob=null;notify('已加入 '+seatTitle(out.seat)+'，等待全员接入后开局');await refresh();
+ }finally{joinOptions()}
+});
+$('replay').oninput=()=>{replay=Number($('replay').value);render()};
+$('backLive').onclick=()=>{replay=null;render()};
+$('players').onchange=event=>safe(async()=>{
+ const seat=event.target.dataset.participantType;if(!seat)return;
+ manage();await api('/api/participant-type',{match:current,seat,type:event.target.value},true);await refresh();
+});
+$('players').onclick=event=>safe(async()=>{
+ const participant=event.target.closest('[data-seat]');if(participant)return participantAction(participant);
+ const button=event.target.closest('[data-wake-seat]');if(!button)return;
+ manage();const room=current,seat=button.dataset.wakeSeat,key=room+':'+seat,connection=(match.connections||[]).find(c=>c.seat===seat);
+ if(wakeRequests.has(key)||!connection?.canWake)return;
+ wakeRequests.add(key);render();
+ try{const result=await api('/api/wake-check',{match:room,seat,bindingId:connection.bindingId,attemptId:connection.attemptId},true);notify(result.message)}finally{wakeRequests.delete(key);await refresh()}
+});
+$('matches').onclick=event=>safe(async()=>{
+ const button=event.target.closest('[data-id]');if(!button)return;
+ selectRoom(button.dataset.id);replay=null;playerData=null;humanJob=null;autoJoin=false;$('reveal').checked=false;await refresh();
+});
+$('taskList').onclick=event=>safe(async()=>{
+ const button=event.target.closest('[data-retry-task]');if(!button)return;
+ manage();button.disabled=true;try{await api('/api/control',{match:current,action:'retry',taskId:button.dataset.retryTask},true)}finally{await refresh()}
+});
+$('board').onclick=event=>safe(async()=>{
+ const button=event.target.closest('[data-cell],[data-target]');if(!button)return;
+ if(button.dataset.cell){
+  const cell=button.dataset.cell.split(',').map(Number),g=replay===null?match.game:match.history[replay]?.game;
+  if(playerData&&replay===null){
+   const p=g.board[cell[1]][cell[0]],side=typeof p==='string'?(p[0]==='r'?'red':'black'):p?.side;
+   if(side!==playerData.seat)return;
+  }
+  selectedCell=selectedCell?.join(',')===cell.join(',')?null:cell;render();return;
+ }
+ if(!playerData||replay!==null){$('boardInstruction').textContent='目标 '+button.dataset.target+'：仅预览，不提交棋步';return}
+ if(!humanJob||submitting)return;
+ await submitHuman({from:selectedCell,to:button.dataset.target.split(',').map(Number)});
+});
+$('board').onkeydown=event=>{if(event.key==='Escape'){selectedCell=null;render()}};
+$('playerControls').onsubmit=event=>{event.preventDefault();safe(async()=>{
+ const target=$('actionTarget')?.value||null,phase=playerData?.privateView.phase;
+ let result;
+ if(phase==='discuss')result={type:'speak',text:$('speechText').value};
+ else if(phase==='witch'){
+  const choice=document.querySelector('input[name="witchChoice"]:checked').value;
+  if(choice==='poison'&&!target)throw Error('请选择毒药目标');
+  result={type:'witch',save:choice==='save',poison:choice==='poison'?target:null};
+ }else result={type:({wolf:'kill',seer:'inspect',vote:'vote'})[phase],target};
+ await submitHuman(result);
+})};
+$('playerControls').onclick=event=>{if(event.target.closest('[data-resign]'))safe(async()=>{
+ if(!confirm('确认认输？本局将立即结束。'))return;
+ const me=credential();await api('/api/player',{action:'resign'},false,me.token);await refresh();
+})};
+async function submitHuman(result){
+ if(submitting||replay!==null||!humanJob||!playerData||match.paused)return;
+ const room=current,me=credential(),job=humanJob;submitting=true;
+ $('playerControls').querySelector('button[type="submit"]')?.setAttribute('disabled','');
+ try{
+  const out=await api('/api/player',{action:'submit',taskId:job.taskId,attemptId:job.attemptId,result},false,me.token);
+  if(!out.ok)throw Error(out.details||out.error);
+  selectedCell=null;notify('行动已提交');
+ }finally{
+  submitting=false;if(current===room)await refresh();
+  $('playerControls').querySelector('button[type="submit"]')?.removeAttribute('disabled');
+ }
+}
+async function refresh(){
+ if(refreshing)return;
+ refreshing=true;
+ try{
+  const rooms=await api('/api/matches');
+  if(!current&&rooms.length)selectRoom(rooms.at(-1).id);
+  $('matches').innerHTML=rooms.slice().reverse().map(m=>'<button class="room '+(current===m.id?'active':'')+'" data-id="'+esc(m.id)+'"><strong>'+esc(m.title)+'</strong><small>'+kinds[m.kind]+' · '+(m.status==='finished'?'已结束':m.started?'进行中':'待接入')+'</small></button>').join('');
+  if(!current)return;
+  const room=current,me=credential();
+  if(me)$('reveal').checked=false;
+  const data=await api('/api/matches/'+encodeURIComponent(room)+($('reveal').checked?'?reveal=1':''),null,$('reveal').checked);
+  if(current!==room)return;
+  match=data;playerData=null;
+  if(me){
+   try{
+    const status=await api('/api/player',{action:'status'},false,me.token);
+    if(current!==room)return;
+    if(status.match.id!==room)throw Error('席位凭据与当前房间不匹配');
+    match=status.match;playerData=status;clockOffset=status.serverNow-Date.now();
+    if(status.task&&(!humanJob||humanJob.taskId!==status.task.taskId||humanJob.attemptId!==status.task.attemptId)){
+     const claimed=await api('/api/player',{action:'claim'},false,me.token);
+     if(current!==room)return;
+     humanJob=claimed.job||null;
+    }else if(status.task&&humanJob)humanJob.deadline=status.task.deadline;
+    else humanJob=null;
+   }catch(error){
+    humanJob=null;
+    if(error.status===401||error.message==='Binding revoked'){save('arenaPlayer:'+room,null);notify('席位凭据已失效，请重新加入')}
+    else throw error;
+   }
+  }else humanJob=null;
+  if(admin){
+   [match.connections,match.admin]=await Promise.all([api('/api/matches/'+room+'/connections',null,true).catch(()=>[]),api('/api/matches/'+room+'/admin',null,true).catch(()=>null)]);
+  }else{match.connections=[];match.admin=null}
+  if(current!==room)return;
+  render();if($('joinDialog').open)joinOptions();
+  if(autoJoin&&stored('arenaJoin:'+room)&&!credential()){autoJoin=false;await openJoin()}
+ }finally{refreshing=false}
+}
+function connectionText(p){
+ if(!p.connected)return p.type==='human'?'等待真人加入':'等待 AI 会话接入';
+ if(p.type==='human')return (p.nickname||'棋友')+' · '+(p.online?'在线':'等待连接 / 暂时离线');
+ const d=match.connections?.find(c=>c.seat===p.seat),labels={connected:'已连接',parked:'待命',pending:'待通知',sending:'通知中',sent:'已送达，待领取',claimed:'已领取',uncertain:'送达待核实',completed:'已结束'};
+ return p.provider+' · '+(p.continuationMode==='wake'?(p.wakeTransport==='relay'?'远端唤醒':'本机唤醒'):'轮询等待')+(d?' · '+(labels[d.status]||'待连接'):'');
+}
+function render(){
+ if(!match)return;
+ const g=replay===null?match.game:(match.history[replay]?.game||match.game),finished=match.game.status==='finished';
+ const focused=document.activeElement,focusCell=focused?.dataset?.cell,focusTarget=focused?.dataset?.target;
+ $('title').textContent=match.title;$('subtitle').textContent=kinds[match.kind]+' · 真人与 AI 同席 · 规则引擎校验';
+ $('status').textContent=match.paused?'房主已暂停':g.status==='finished'?'已结束 · '+(g.winner||'平局'):match.started?'正在进行':'等待选手';
+ $('gameKind').textContent=match.kind.toUpperCase();
+ $('phase').textContent=match.kind==='werewolf'?'第 '+g.round+' 轮 · '+({night:'夜间行动',wolf:'狼人行动',seer:'预言家行动',witch:'女巫行动',discuss:'白天讨论',vote:'放逐投票',finished:'已结束'})[g.phase]:(g.turn==='red'?'红方':'黑方')+'行棋 · 第 '+(g.ply||0)+' 手';
+ $('live').textContent=replay===null?'● LIVE':'◷ REPLAY';
+ $('startButton').disabled=!admin||match.started||finished||match.participants.some(p=>!p.connected);
+ $('pauseButton').disabled=!admin||!match.started||finished;$('pauseButton').textContent=match.paused?'继续比赛':'暂停比赛';
+ $('endButton').disabled=!admin||finished;$('shareRoom').disabled=!admin||finished;
+ $('reveal').disabled=!!credential();
+ $('replay').max=Math.max(0,match.history.length-1);$('replay').value=replay===null?Math.max(0,match.history.length-1):replay;
+ $('replayLabel').textContent=replay===null?'实时 · '+match.history.length+' 条历史记录':'回放 '+(replay+1)+'/'+match.history.length+' · '+(match.history[replay]?.text||'');
+ if(match.kind!=='werewolf'){
+  const context=current+':'+replay+':'+g.ply;
+  if(context!==boardContext){selectedCell=null;boardContext=context}
+  const interactive=!!playerData&&replay===null,canAct=interactive&&!!humanJob&&!submitting&&!match.paused;
+  $('board').innerHTML=ArenaUI.chess(g,selectedCell,{interactive,canAct,side:playerData?.seat});
+  if(focusCell)$('board').querySelector('[data-cell="'+focusCell+'"]')?.focus({preventScroll:true});
+  else if(focusTarget)$('board').querySelector('[data-target="'+focusTarget+'"]')?.focus({preventScroll:true});
+ }else{
+  const warning=$('reveal').checked&&replay===null?'<div class="reveal-warning">管理全知视图 · 包含隐藏身份，勿向选手分享</div>':'';
+  $('board').innerHTML=warning+'<div class="night-banner">'+(['night','wolf','seer','witch'].includes(g.phase)?'天黑请闭眼 · 私有行动仅对应角色可见':'天亮了 · 请根据公开线索讨论与投票')+'<br>普通观战不显示隐藏角色、夜间目标或验人结果</div><div class="wolves">'+g.players.map(p=>{
+   const participant=match.participants.find(item=>item.seat===p.id);
+   return '<div class="seat-card '+(!p.alive?'dead':'')+'"><div class="seat-avatar">'+(participant?.type==='human'?'<span class="provider-avatar human-avatar">真人</span>':ArenaUI.avatar(participant?.provider,avatarManifest))+'</div><strong>'+esc(p.id)+' 号玩家</strong><small>'+esc(p.role?ArenaUI.roleNames[p.role]:'身份隐藏')+' · '+(p.alive?'存活':'已出局')+'</small></div>';
+  }).join('')+'</div>';
+ }
+ $('count').textContent=match.participants.filter(p=>p.connected).length+' / '+match.participants.length;
+ $('players').innerHTML=match.participants.map(p=>{
+  const d=match.connections?.find(c=>c.seat===p.seat),control=ArenaUI.wakeControl(d,wakeRequests.has(current+':'+p.seat));
+  return '<div class="player">'+(p.type==='human'?'<span class="provider-avatar human-avatar">真人</span>':ArenaUI.avatar(p.provider,avatarManifest))+'<div class="player-meta"><strong>'+seatTitle(p.seat)+'</strong><small>'+esc(connectionText(p))+'</small>'+(d?.error?'<small>'+esc(d.error)+'</small>':'')+'</div><div class="participant-actions"><select class="participant-type" data-participant-type="'+p.seat+'" aria-label="'+seatTitle(p.seat)+'类型" '+(!admin||match.started||p.connected||finished?'disabled':'')+'><option value="ai" '+(p.type==='ai'?'selected':'')+'>AI</option><option value="human" '+(p.type==='human'?'selected':'')+'>真人</option></select>'+(control?'<button class="wake-button" data-wake-seat="'+p.seat+'" '+(control.disabled?'disabled':'')+' title="'+esc(control.reason)+'">'+esc(control.label)+'</button>':'')+'<button data-seat="'+p.seat+'" '+((p.connected||p.type==='ai')&&!admin||p.type==='human'&&!p.connected&&!!credential()||finished?'disabled':'')+'>'+(p.connected?'撤销':p.type==='human'?'加入'+(p.seat==='red'?'红方':p.seat==='black'?'黑方':p.seat.slice(1)+' 号席位'):'邀请 AI')+'</button></div></div>';
+ }).join('');
+ $('adminTasks').hidden=!match.admin;const tasks=match.admin?.tasks||[];
+ $('taskList').innerHTML=tasks.length?tasks.map(t=>'<div class="admin-task"><span>'+esc(t.message||'系统异常')+'<small>'+esc(({pending:'待处理',retried:'已允许重试',resolved:'已解决',closed:'已关闭'})[t.status])+'</small></span>'+(t.canRetry?'<button data-retry-task="'+esc(t.id)+'">允许一次重试</button>':'')+'</div>').join(''):'<p class="muted">暂无系统异常待办</p>';
+ const events=replay===null?match.events:match.history.slice(0,replay+1);
+ $('events').innerHTML=events.slice().reverse().map(e=>'<div class="event '+esc(e.type)+'"><time>'+new Date(e.at).toLocaleTimeString('zh-CN',{hour12:false})+'</time><span>'+esc(e.text)+'</span></div>').join('');
+ renderPlayerPanel();
+}
+function renderPlayerPanel(){
+ const panel=$('playerControls');panel.hidden=!playerData||replay!==null;
+ if(panel.hidden){panel.innerHTML='';panelContext='';return}
+ const key=JSON.stringify([current,humanJob?.taskId,humanJob?.attemptId,playerData.privateView.self,match.paused,match.started,match.game.status]);
+ if(key!==panelContext){
+  panelContext=key;
+  const status=match.paused?'比赛已暂停':!match.started?'等待房主开始比赛':match.game.status==='finished'?'本局已结束':humanJob?'轮到你行动':'等待其他选手行动';
+  panel.innerHTML='<div class="turn-clock" id="turnClock"></div><p>'+seatTitle(playerData.seat)+' · '+status+'</p>'+(match.kind==='werewolf'?ArenaUI.werewolfActions(playerData.privateView,match.paused?null:humanJob):'<h3>你执'+(playerData.seat==='red'?'红方':'黑方')+'，点击棋子和合法目标完成落子</h3>'+(match.started&&match.game.status!=='finished'?'<button data-resign '+(match.paused?'disabled':'')+'>认输</button>':''));
+ }
+ updateClock();
+}
+function updateClock(){
+ const clock=$('turnClock');if(!clock)return;
+ clock.textContent=match?.paused?'计时已冻结':humanJob?'本次行动剩余 '+Math.max(0,Math.ceil((humanJob.deadline-Date.now()-clockOffset)/1000))+' 秒':'';
+}
+safe(async()=>{
+ [network,avatarManifest]=await Promise.all([api('/api/network'),api('/assets/avatars/manifest.json').catch(()=>({}))]);
+ $('shareAddress').innerHTML=[...network.lanOrigins,network.localOrigin].map(url=>'<option value="'+esc(url)+'">'+esc(url)+(url===network.localOrigin?'（仅本机）':'')+'</option>').join('');
+ $('networkHint').textContent=network.lanOrigins.length?'真人通过房间链接加入；AI 请在选手旁邀请':'未发现局域网地址，请检查网络连接';
+ await refresh();
+});
+setInterval(()=>safe(refresh),2000);setInterval(updateClock,1000);

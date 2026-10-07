@@ -181,6 +181,40 @@ test('Timeout needs no judge and sends one completion notice to each parked part
  assert.equal(f.arena.get(id).bindings.black.armed, false);
 });
 
+test('Local invitation uses the installed absolute client from another model workspace and retains host verification',async t=>{
+ const root=temporaryDirectory('arena-local-client-'),modelWorkspace=path.join(root,'原会话 工作区'),wrongWorkspace=path.join(root,'其他 工作区');
+ fs.mkdirSync(modelWorkspace);fs.mkdirSync(wrongWorkspace);
+ const adapter=host();adapter.read=async binding=>({session:binding.session,workspace:modelWorkspace,status:'idle',messages:adapter.messages.get(binding.session)||[]});
+ const app=await serve({port:0,root:path.join(root,'server'),autoTick:false,wakeOptions:{adapters:{opencode:adapter}}});
+ t.after(async()=>{await app.close();removeTemporaryDirectory(root)});
+ const id=app.arena.create({kind:'xiangqi'}).id,invitation=app.arena.invite(id,'red',app.origin);
+ const script=invitation.text.match(/node "([^"]+client\.mjs)" connect/)[1],credential=path.join(modelWorkspace,'tmp','red.credential.json');
+ assert.equal(path.resolve(script),path.resolve('client.mjs'));
+ assert.ok(path.isAbsolute(script));assert.ok(fs.existsSync(script));assert.ok(!fs.existsSync(path.join(modelWorkspace,'client.mjs')));
+ assert.ok(invitation.text.includes(`node "${script}" resume`));assert.ok(invitation.text.includes(`node "${script}" submit`));
+ const args=[script,'connect','--url',app.origin,'--match',id,'--seat','red','--invitation',invitationToken(invitation),'--provider','opencode','--session','ses_other-workspace','--workspace','.','--out','tmp/red.credential.json'];
+ await assert.rejects(cli(process.execPath,args,{cwd:wrongWorkspace}),/workspace/);
+ assert.ok(app.arena.get(id).invites.red);assert.equal(fs.existsSync(path.join(wrongWorkspace,'tmp','red.credential.json')),false);
+ const connected=JSON.parse((await cli(process.execPath,args,{cwd:modelWorkspace})).stdout);
+ assert.equal(connected.parked,true);
+ assert.equal(app.arena.get(id).bindings.red.wake.workspace,modelWorkspace);
+ assert.equal(JSON.parse(fs.readFileSync(credential,'utf8')).workspace,modelWorkspace);
+ // Later commands must retain the original workspace even when launched elsewhere.
+ await cli(process.execPath,[script,'wake-bind','--credential',credential],{cwd:root});
+ assert.equal(app.arena.get(id).bindings.red.wake.workspace,modelWorkspace);
+ assert.equal(JSON.parse((await cli(process.execPath,[script,'resume','--credential',credential],{cwd:root})).stdout).parked,true);
+ const black=app.arena.invite(id,'black',app.origin);
+ app.arena.connect({match:id,seat:'black',provider:'simulated',session:'fixture-black',invitation:invitationToken(black)});
+ app.arena.start(id);await Promise.all(app.wake.tick());
+ assert.equal(adapter.calls.length,1);assert.equal(adapter.calls[0].binding.workspace,modelWorkspace);
+ assert.ok(adapter.calls[0].prompt.includes(`node "${script}" resume`));assert.ok(adapter.calls[0].prompt.includes(`node "${script}" submit`));
+ assert.ok(!adapter.calls[0].prompt.includes(path.join(modelWorkspace,'client.mjs')));
+ const {job}=JSON.parse((await cli(process.execPath,[script,'resume','--credential',credential],{cwd:root})).stdout);
+ const response=path.join(modelWorkspace,'tmp','response.json');fs.writeFileSync(response,JSON.stringify({from:[0,6],to:[0,5]}),'utf8');
+ const submitted=JSON.parse((await cli(process.execPath,[script,'submit','--credential',credential,'--task',job.taskId,'--attempt',job.attemptId,'--file',response],{cwd:root})).stdout);
+ assert.equal(submitted.ok,true);assert.equal(app.arena.get(id).game.ply,1);
+});
+
 test('HTTP and actual CLI wake flow return parked promptly and protect management diagnostics', async t => {
  const root = temporaryDirectory('arena-wake-http-'), adapter = host(), app = await serve({port: 0, root, adminToken: 'fixture-admin', wakeOptions: {adapters: {opencode: adapter}}});
  t.after(async () => { await app.close(); removeTemporaryDirectory(root); });
@@ -239,7 +273,7 @@ test('Manual uncertain delivery only verifies and never resends; wait bindings c
 
 test('HTTP manual wake validates administrator, binding snapshot, local static assets and no arbitrary target',async t=>{
  const root=temporaryDirectory('arena-manual-http-'),adapter=host();
- const app=await serve({port:0,root,adminToken:'manual-ui-test-only',wakeOptions:{workspace,adapters:{opencode:adapter}}});
+ const app=await serve({port:0,root,adminToken:'manual-ui-test-only',autoTick:false,wakeOptions:{workspace,adapters:{opencode:adapter}}});
  t.after(async()=>{await app.close();removeTemporaryDirectory(root)});
  const id=app.arena.create({kind:'xiangqi'}).id;
  for(const seat of app.arena.seats(app.arena.get(id))){const invitation=app.arena.invite(id,seat,app.origin);await app.wake.connect({match:id,seat,provider:'opencode',session:'manual-'+seat,credentialPath:path.join(root,seat+'.credential.json'),invitation:invitationToken(invitation)})}
