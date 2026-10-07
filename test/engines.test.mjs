@@ -305,3 +305,119 @@ test('Werewolf public and inactive-seat views conceal exact night phase', () => 
  assert.equal(werewolfView(s,'p1').phase,'night');
  assert.equal(werewolfView(s,'p3').phase,'seer');
 });
+
+import { initialBlind, legalBlind, applyBlind, blindView } from '../lib/blind.mjs';
+const bmove = (from, to) => ({ from, to });
+const hasBlindMove = (state, from, to) => legalBlind(state).some(m => JSON.stringify(m) === JSON.stringify(bmove(from, to)));
+
+test('Blind Xiangqi deals 32 pieces: two open kings, 30 shuffled covered pieces, 44 opening moves', () => {
+  const state = initialBlind({ seed: 42 });
+  const all = state.board.flat().filter(Boolean);
+  assert.equal(all.length, 32);
+  assert.equal(all.filter(p => p.h).length, 30);
+  assert.deepEqual([state.board[0][4].s, state.board[0][4].k, state.board[0][4].h], ['black', 'K', false]);
+  assert.deepEqual([state.board[9][4].s, state.board[9][4].k, state.board[9][4].h], ['red', 'K', false]);
+  const pool = all.filter(p => p.h).map(p => p.s[0] + p.k).sort();
+  const expected = [];
+  for (const s of ['r', 'b']) for (const k of ['R', 'R', 'H', 'H', 'E', 'E', 'A', 'A', 'C', 'C', 'P', 'P', 'P', 'P', 'P']) expected.push(s + k);
+  assert.deepEqual(pool, expected.sort());
+  assert.equal(legalBlind(state).length, 44);
+  assert.equal(state.turn, 'red');
+  const a = initialBlind({ seed: 7 }), b = initialBlind({ seed: 7 });
+  assert.equal(JSON.stringify(a.board), JSON.stringify(b.board));
+  const view = blindView(state);
+  assert.equal(view.board[0][0].hidden, true);
+  assert.deepEqual(view.board[0][4], { hidden: false, side: 'black', kind: 'K' });
+});
+
+test('Blind covered pieces move as their cover, reveal on the first move and may change allegiance', () => {
+  const state = initialBlind({ seed: 42 });
+  const before = JSON.stringify(state);
+  for (const action of [null, {}, bmove([0.1, 6], [0, 5]), bmove([-1, 6], [0, 5]), bmove([0, 6], [0, 6]), bmove([0, 6], [1, 6]), bmove([0, 6], [0, 4])]) {
+    assert.throws(() => applyBlind(state, 'red', action));
+    assert.equal(JSON.stringify(state), before);
+  }
+  assert.throws(() => applyBlind(state, 'black', bmove([0, 3], [0, 4])));
+  applyBlind(state, 'red', bmove([0, 6], [0, 5]));
+  const p = state.board[5][0];
+  assert.equal(p.h, false);
+  assert.equal(state.lastMove.wasHidden, true);
+  assert.equal(state.quietPlies, 0);
+  assert.match(state.lastMove.text, /暗棋 1,4 → 1,5，揭开为/);
+  assert.equal(state.board[5][0].s === 'red', !state.lastMove.text.includes('移交'));
+  // A covered piece still on its square moves as the square's kind: back-rank elephant stays on its own half.
+  const s2 = initialBlind({ seed: 11 });
+  assert.equal(hasBlindMove(s2, [2, 9], [4, 7]), true);
+  assert.equal(hasBlindMove(s2, [2, 9], [0, 7]), true);
+  // Covered elephants keep the river rule; the same piece may cross once revealed (house rule).
+  const s3 = initialBlind({ seed: 42 });
+  s3.board = Array.from({ length: 10 }, () => Array(9).fill(null));
+  s3.board[9][4] = { s: 'red', k: 'K', h: false, cs: null, ck: null };
+  s3.board[0][4] = { s: 'black', k: 'K', h: false, cs: null, ck: null };
+  s3.board[5][4] = { s: 'red', k: 'E', h: true, cs: 'red', ck: 'E' };
+  s3.repetitions = {};
+  assert.equal(hasBlindMove(s3, [4, 5], [2, 3]), false);
+  assert.equal(hasBlindMove(s3, [4, 5], [2, 7]), true);
+  s3.board[5][4].h = false;
+  assert.equal(hasBlindMove(s3, [4, 5], [2, 3]), true);
+});
+
+test('Blind capture-the-general wins immediately; hidden captures are revealed publicly', () => {
+  const state = initialBlind({ seed: 42 });
+  state.board = Array.from({ length: 10 }, () => Array(9).fill(null));
+  state.board[9][4] = { s: 'red', k: 'K', h: false, cs: null, ck: null };
+  state.board[0][4] = { s: 'black', k: 'K', h: false, cs: null, ck: null };
+  state.board[5][4] = { s: 'red', k: 'R', h: true, cs: 'red', ck: 'R' };
+  state.repetitions = {};
+  applyBlind(state, 'red', bmove([4, 5], [4, 0]));
+  assert.equal(state.status, 'finished');
+  assert.equal(state.winner, 'red');
+  assert.equal(state.reason, 'general-captured');
+  const view = blindView(state);
+  assert.equal(view.captured.red.length, 1);
+  assert.deepEqual(view.captured.red[0], { hidden: false, side: 'black', kind: 'K' });
+});
+
+test('Blind flying-general capture works along an open file; no check obligation exists', () => {
+  const state = initialBlind({ seed: 42 });
+  state.board = Array.from({ length: 10 }, () => Array(9).fill(null));
+  state.board[9][4] = { s: 'red', k: 'K', h: false, cs: null, ck: null };
+  state.board[0][4] = { s: 'black', k: 'K', h: false, cs: null, ck: null };
+  state.board[5][3] = { s: 'black', k: 'R', h: false, cs: null, ck: null };
+  state.repetitions = {};
+  // Red king may capture the exposed black general down the open file.
+  assert.equal(hasBlindMove(state, [4, 9], [4, 0]), true);
+  // Red may also make an unrelated waiting move even though black rook attacks the palace: no forced check response.
+  state.board[9][0] = { s: 'red', k: 'R', h: false, cs: null, ck: null };
+  applyBlind(state, 'red', bmove([0, 9], [0, 8]));
+  assert.equal(state.status, 'playing');
+  assert.equal(state.turn, 'black');
+});
+
+test('Blind no-legal-move loses and quiet plies / repetition draw', () => {
+  const state = initialBlind({ seed: 42 });
+  state.board = Array.from({ length: 10 }, () => Array(9).fill(null));
+  state.board[9][4] = { s: 'red', k: 'K', h: false, cs: null, ck: null };
+  state.board[7][9] = { s: 'black', k: 'K', h: false, cs: null, ck: null };
+  state.board[8][9] = { s: 'black', k: 'P', h: false, cs: null, ck: null };
+  state.repetitions = {};
+  // Capture-the-king rules have no check concept: pieces are lost only when every
+  // own move is physically impossible. The black king sits outside its palace and
+  // the last black pawn is boxed in at the back rank corner, so black has no move.
+  applyBlind(state, 'red', bmove([4, 9], [3, 9]));
+  assert.equal(state.status, 'finished');
+  assert.equal(state.winner, 'red');
+  assert.equal(state.reason, 'no-legal-move');
+  // Quiet-ply accounting: revealed pieces shuffling without capture accumulates toward the 120-ply draw.
+  const s2 = initialBlind({ seed: 42 });
+  s2.board = Array.from({ length: 10 }, () => Array(9).fill(null));
+  s2.board[9][4] = { s: 'red', k: 'K', h: false, cs: null, ck: null };
+  s2.board[0][4] = { s: 'black', k: 'K', h: false, cs: null, ck: null };
+  s2.repetitions = {};
+  s2.quietPlies = 119;
+  applyBlind(s2, 'red', bmove([4, 9], [3, 9]));
+  assert.equal(s2.quietPlies, 120);
+  assert.equal(s2.status, 'finished');
+  assert.equal(s2.winner, null);
+  assert.equal(s2.reason, 'quiet-120');
+});

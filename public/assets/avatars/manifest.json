@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "reviewedAt": "2026-10-06",
+  "reviewedAt": "2026-10-07",
   "assetBase": "/assets/avatars/",
   "defaultProvider": "default",
   "providers": {
@@ -8,27 +8,27 @@
       "label": "CodeArts",
       "src": "/assets/avatars/codearts.svg",
       "asset": "assets/avatars/codearts.svg",
-      "kind": "initials-fallback",
+      "kind": "original-brand-evocation",
       "initials": "CA",
       "source": null,
-      "license": "Original project text/geometry; no third-party logo copied",
+      "license": "Original vector artwork drawn for this project; white code brackets on CodeArts red evoke the brand color without copying trademarked logo geometry",
       "licenseUrl": null,
       "licenseFile": null,
       "referenceSources": [
         "https://codearts.huaweicloud.com/index.html"
       ],
-      "gap": "An official product page was verified, but a permissively licensed official logo repository or explicit reusable asset grant was not found in this review. Website visibility was not treated as copyright permission.",
-      "trademarkNote": "Neutral text label only. Provider names may be trademarks of their respective owners. No affiliation or endorsement is asserted.",
-      "sha256": "7bd774008e763719a663f3dd7810a0a980a656cbf1e22790c9aba10fdbe9e26c"
+      "designNote": "Hand-drawn </> brackets glyph; only the brand color is referenced. An official reusable logo grant was not found, so no third-party mark is used.",
+      "trademarkNote": "Original artwork. Provider names may be trademarks of their respective owners. No affiliation or endorsement is asserted.",
+      "sha256": "b818c428f45da4b6ec8c1e23c454ba9651bf647fb76eed4a6953d41babc2e976"
     },
     "codex": {
       "label": "Codex",
       "src": "/assets/avatars/codex.svg",
       "asset": "assets/avatars/codex.svg",
-      "kind": "initials-fallback",
+      "kind": "original-brand-evocation",
       "initials": "CX",
       "source": null,
-      "license": "Original project text/geometry; no third-party logo copied",
+      "license": "Original vector artwork drawn for this project; a six-petal rosette knot on a dark field evokes the Codex blossom motif without copying trademarked logo geometry",
       "licenseUrl": null,
       "licenseFile": null,
       "referenceSources": [
@@ -36,18 +36,18 @@
         "https://github.com/openai/codex/blob/main/LICENSE",
         "https://openai.com/brand/"
       ],
-      "gap": "The complete current openai/codex tree has no Codex-product SVG mark. Its Apache-2.0 license covers repository materials; the OpenAI sample-skill blossom is not a Codex-product mark. No borrowed logo was used.",
-      "trademarkNote": "Neutral text label only. Provider names may be trademarks of their respective owners. No affiliation or endorsement is asserted.",
-      "sha256": "6a301cf2e18fac13f8795902794a0478294c170b6e1e2dd45d24d96fddc0ff00"
+      "designNote": "Hand-drawn rosette of three rotated ellipse strokes; only the blossom motif and dark brand field are referenced. No repository or brand asset is copied.",
+      "trademarkNote": "Original artwork. Provider names may be trademarks of their respective owners. No affiliation or endorsement is asserted.",
+      "sha256": "c2cc32a11031c7539b582f843e859fa176d1106b163ca954a8f498822cfe1e07"
     },
     "cursor": {
       "label": "Cursor",
       "src": "/assets/avatars/cursor.svg",
       "asset": "assets/avatars/cursor.svg",
-      "kind": "initials-fallback",
+      "kind": "original-brand-evocation",
       "initials": "CU",
       "source": null,
-      "license": "Original project text/geometry; no third-party logo copied",
+      "license": "Original vector artwork drawn for this project; an isometric cube outline with a pointer on a dark field evokes the Cursor brand motif without copying trademarked logo geometry",
       "licenseUrl": null,
       "licenseFile": null,
       "referenceSources": [
@@ -55,42 +55,42 @@
         "https://github.com/simple-icons/simple-icons/blob/develop/data/simple-icons.json",
         "https://github.com/simple-icons/simple-icons/blob/develop/DISCLAIMER.md"
       ],
-      "gap": "Cursor brand downloads and a Simple Icons drawing exist, but the Simple Icons Cursor entry has no individual license. The project CC0 license does not establish every brand icon copyright license; a neutral fallback is used conservatively.",
-      "trademarkNote": "Neutral text label only. Provider names may be trademarks of their respective owners. No affiliation or endorsement is asserted.",
-      "sha256": "07d2fe9a0ce9b26adbba8a4cdcea16373104616f1c99603b3bd4d1ec73418547"
+      "designNote": "Hand-drawn cube wireframe plus cursor arrow; only the dark/light brand palette is referenced. No brand download or Simple Icons path is used.",
+      "trademarkNote": "Original artwork. Provider names may be trademarks of their respective owners. No affiliation or endorsement is asserted.",
+      "sha256": "2ba939dadeba8da05faf7103f56b3c010ef4479c4dbfcd822db30a63c6ad0faf"
     },
     "default": {
       "label": "Unknown provider",
       "src": "/assets/avatars/default.svg",
       "asset": "assets/avatars/default.svg",
-      "kind": "initials-fallback",
+      "kind": "original-generic-icon",
       "initials": "AI",
       "source": null,
-      "license": "Original project text/geometry; no third-party logo copied",
+      "license": "Original vector artwork drawn for this project; generic processor-chip icon, no provider identity asserted",
       "licenseUrl": null,
       "licenseFile": null,
       "referenceSources": [],
-      "gap": "Generic locally created initials; no third-party mark or provider identity is asserted.",
-      "trademarkNote": "Neutral text label only. Provider names may be trademarks of their respective owners. No affiliation or endorsement is asserted.",
-      "sha256": "fd84721b8d5e01d7d82aff44ac43a96cab8cae59d11adf528d3c9a99843ef443"
+      "designNote": "Hand-drawn chip with pins; neutral placeholder for unrecognised providers.",
+      "trademarkNote": "Original artwork. No provider identity is asserted.",
+      "sha256": "97e79a9775c26233d0d6d20e04ade02784c64384a3494c2bbc9248126fe7ea6d"
     },
     "mimo": {
       "label": "MiMo",
       "src": "/assets/avatars/mimo.svg",
       "asset": "assets/avatars/mimo.svg",
-      "kind": "initials-fallback",
+      "kind": "original-brand-evocation",
       "initials": "MM",
       "source": null,
-      "license": "Original project text/geometry; no third-party logo copied",
+      "license": "Original vector artwork drawn for this project; a rounded M monogram on Xiaomi orange evokes the MiMo brand color without copying trademarked logo geometry",
       "licenseUrl": null,
       "licenseFile": null,
       "referenceSources": [
         "https://github.com/XiaomiMiMo/MiMo-Code/blob/main/README.md",
         "https://github.com/XiaomiMiMo/MiMo-Code/blob/main/LICENSE"
       ],
-      "gap": "The official README separates MIT source code from MiMo name/logo/trademark terms. The separately referenced trademark policy was not resolved in this review; no logo license for this use was established.",
-      "trademarkNote": "Neutral text label only. Provider names may be trademarks of their respective owners. No affiliation or endorsement is asserted.",
-      "sha256": "75c502fb08f0056b9375f2e1d1da9ecfdc37ef4f1b95695708a863f46942df13"
+      "designNote": "Hand-drawn M stroke monogram; only the brand orange is referenced. The MiMo trademark policy was not resolved, so no official mark is used.",
+      "trademarkNote": "Original artwork. Provider names may be trademarks of their respective owners. No affiliation or endorsement is asserted.",
+      "sha256": "5f9854a64ace4be003516f009d1fdf80f7dec778223926cc27d147a65b5dfbc0"
     },
     "opencode": {
       "label": "OpenCode",
@@ -132,18 +132,18 @@
       "label": "Visual Studio Code",
       "src": "/assets/avatars/vscode.svg",
       "asset": "assets/avatars/vscode.svg",
-      "kind": "initials-fallback",
+      "kind": "original-brand-evocation",
       "initials": "VS",
       "source": null,
-      "license": "Original project text/geometry; no third-party logo copied",
+      "license": "Original vector artwork drawn for this project; a folded-ribbon chevron on VS Code blue evokes the brand color and fold motif without copying trademarked logo geometry",
       "licenseUrl": null,
       "licenseFile": null,
       "referenceSources": [
         "https://code.visualstudio.com/brand"
       ],
-      "gap": "Microsoft grants scoped icon uses such as tutorials and links to its website and restricts other app/branding associations. This arena-avatar use was not clearly covered, so no official icon is included.",
-      "trademarkNote": "Neutral text label only. Provider names may be trademarks of their respective owners. No affiliation or endorsement is asserted.",
-      "sha256": "a7b259458c5fa34592ebd3d94efb7ed9c323be655ee10a3a3fc04cc6ce145a60"
+      "designNote": "Hand-drawn ribbon chevron; only the brand blue and fold idea are referenced. Microsoft's scoped icon grant did not clearly cover this use, so no official icon is included.",
+      "trademarkNote": "Original artwork. Provider names may be trademarks of their respective owners. No affiliation or endorsement is asserted.",
+      "sha256": "8db89e196d2b212c909919f52df6a93ae11d9fb02a4efc68520e71d6a258f4be"
     }
   },
   "aliases": {
@@ -164,7 +164,7 @@
     "manual": "default",
     "local": "default"
   },
-  "notice": "Only OpenCode and Qoder use vetted official repository logos. All other known providers use explicitly labeled neutral initials. Names and trademarks belong to their respective owners; no affiliation or endorsement is implied.",
+  "notice": "OpenCode and Qoder use vetted official MIT-licensed repository logos. All other known providers use original vector icons drawn for this project that evoke each IDE's brand color or motif without copying trademarked logo geometry. Names and trademarks belong to their respective owners; no affiliation or endorsement is implied.",
   "security": "All avatar image URLs are selected from a fixed local allowlist. SVGs contain static vector/text elements only, with no scripts, CSS, event handlers, links, images, animation, external resources or embedded payloads.",
   "usage": "Show a provider label beside each avatar. Preserve fallback kind in accessible text/tooltips. Keep the license and NOTICE files with redistributions. Never use these avatars as the app own logo."
 }
