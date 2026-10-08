@@ -23,12 +23,14 @@ try{
   const credentialPath=path.resolve(opts.out);
   if(fs.existsSync(credentialPath))throw Error('Credential file exists; use it rather than overwrite');
   const base=arenaUrl(opts.url);if(base.pathname!=='/')throw Error('Use the Arena HTTP origin');
-  const provider=providerName(opts.provider),session=opts.session||(provider==='codex'?process.env.CODEX_THREAD_ID:undefined);
+  const provider=providerName(opts.provider);
+  let session=opts.session||(provider==='codex'?process.env.CODEX_THREAD_ID:undefined);
   const transport=opts['wake-transport']||'local';
   if(!['local','relay'].includes(transport))throw Error('Invalid wake transport');
   const workspace=path.resolve(opts.workspace||process.cwd());
   let config=null;
   if(transport==='relay'&&supportsWake(provider))config=await prepareHost(hostInput(provider,session,credentialPath),{workspace,adapters:createWakeAdapters(),requireWorkspace:true});
+  if(config)session=config.session;
   const relayVerification=config?{verified:true,workspaceVerified:config.workspaceVerified,deviceId:createHash('sha256').update(os.hostname()+'\0'+os.userInfo().username+'\0'+os.homedir()).digest('hex')}:undefined;
   const out=await postArena(base.origin+'/api/connect',{match:opts.match,seat:opts.seat,invitation:opts.invitation,...hostInput(provider,session,credentialPath),workspace,wakeTransport:transport,...(relayVerification?{relayVerification}:{})});
   fs.mkdirSync(path.dirname(credentialPath),{recursive:true,mode:0o700});

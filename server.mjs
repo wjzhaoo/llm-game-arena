@@ -12,7 +12,7 @@ import {relayInvitation} from './lib/invitation.mjs';
 
 const here=path.dirname(fileURLToPath(import.meta.url));
 export const clientFiles=['client.mjs','relay-client.mjs','lib/network.mjs','lib/relay-worker.mjs','lib/wake/common.mjs','lib/wake/host.mjs','lib/wake/index.mjs','lib/wake/codex.mjs','lib/wake/mimo.mjs','lib/wake/qoder.mjs','lib/wake/codearts.mjs','lib/wake/opencode.mjs','.opencode/plugins/arena-codearts.js'];
-const publicFiles=new Set(['index.html','app.js','ui.js','theme.js','style.css','assets/avatars/manifest.json']);
+const publicFiles=new Set(['index.html','app.js','ui.js','werewolf.js','theme.js','style.css','werewolf.css','assets/avatars/manifest.json']);
 const mime=file=>file.endsWith('.html')?'text/html; charset=utf-8':/\.(?:m?js)$/.test(file)?'text/javascript; charset=utf-8':file.endsWith('.svg')?'image/svg+xml':file.endsWith('.png')?'image/png':file.endsWith('.json')?'application/json; charset=utf-8':'text/css; charset=utf-8';
 
 export async function serve({port=Number(process.env.PORT||4318),host=process.env.HOST||'0.0.0.0',root=process.env.ARENA_DATA||path.join(here,'.arena'),adminToken=process.env.ARENA_ADMIN_TOKEN||randomBytes(32).toString('hex'),wakeOptions={},arenaOptions={},autoTick=true,interfaces}={}){

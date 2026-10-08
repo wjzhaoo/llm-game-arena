@@ -6,6 +6,7 @@ import {CodexWake} from '../lib/wake/codex.mjs';
 import {MimoWake, effectivePermission} from '../lib/wake/mimo.mjs';
 import {QoderWake} from '../lib/wake/qoder.mjs';
 import {CodeArtsWake} from '../lib/wake/codearts.mjs';
+import {prepareHost} from '../lib/wake/host.mjs';
 import {ArenaCodeArts} from '../.opencode/plugins/arena-codearts.js';
 import {temporaryDirectory, removeTemporaryDirectory} from '../lib/temp.mjs';
 
@@ -168,4 +169,59 @@ test('CodeArts retains compatible Basic Auth bridges and rejects foreign endpoin
  assert.deepEqual(model, {providerID: 'fixture', modelID: 'model'});
  fs.writeFileSync(file, JSON.stringify({...descriptor, url: 'https://example.com'}), 'utf8');
  assert.throws(() => adapter.discovery({session: descriptor.sessionId, workspace}), /loopback/);
+});
+
+test('CodeArts bridge lists only this workspace sessions behind the bearer token', async t => {
+ const root = directory(t, 'codearts-list-');
+ const hooks = await ArenaCodeArts({directory: root, client: {session: {
+  list: async () => ({data: [{id: 'session-a', directory: root}, {id: 'session-b', directory: path.join(root, 'other')}, {id: 'bad id!', directory: root}, {id: 'session-c'}]}),
+  get: async () => ({data: {}}), status: async () => ({data: {}}), messages: async () => ({data: []}), promptAsync: async () => ({data: {}})
+ }}});
+ t.after(() => hooks.dispose());
+ const descriptor = JSON.parse(fs.readFileSync(path.join(root, 'tmp', 'codearts-bridge', 'bridge.json'), 'utf8'));
+ assert.equal((await fetch(descriptor.url + '/v1/sessions')).status, 401);
+ const response = await fetch(descriptor.url + '/v1/sessions', {headers: {Authorization: 'Bearer ' + descriptor.token}});
+ assert.equal(response.status, 200);
+ assert.deepEqual(await response.json(), [{id: 'session-a', directory: root}]);
+});
+
+test('CodeArts resolveSession auto-discovers only a unique workspace session', async t => {
+ const root = directory(t, 'codearts-resolve-');
+ let sessions = [{id: 'session-a', directory: root}];
+ const hooks = await ArenaCodeArts({directory: root, client: {session: {
+  list: async () => ({data: sessions}),
+  get: async options => ({data: {id: options.path.id, directory: root}}),
+  status: async () => ({data: {}}), messages: async () => ({data: []}), promptAsync: async () => ({data: {}})
+ }}});
+ t.after(() => hooks.dispose());
+ const adapter = new CodeArtsWake({credentialFile: path.join(root, 'tmp', 'codearts-bridge', 'bridge.json')});
+ assert.equal(await adapter.resolveSession({workspace: root}), 'session-a');
+ sessions = [];
+ await assert.rejects(adapter.resolveSession({workspace: root}), /未发现 CodeArts 会话/);
+ sessions = [{id: 'session-a', directory: root}, {id: 'session-b', directory: root}];
+ await assert.rejects(adapter.resolveSession({workspace: root}), /2 个 CodeArts 会话/);
+});
+
+test('CodeArts resolveSession reuses a pinned descriptor without HTTP and reports bridges without listing', async t => {
+ const root = directory(t, 'codearts-pinned-'), file = path.join(root, 'bridge.json');
+ fs.writeFileSync(file, JSON.stringify({version: 1, sessionId: 'pinned-session', directory: root, url: 'http://127.0.0.1:5007', username: 'u', password: 'p'}), 'utf8');
+ let calls = 0;
+ const adapter = new CodeArtsWake({credentialFile: file, fetchImpl: async () => { calls++; return json({error: 'not found'}, 404); }});
+ assert.equal(await adapter.resolveSession({workspace: root}), 'pinned-session');
+ assert.equal(calls, 0);
+ fs.writeFileSync(file, JSON.stringify({version: 1, directory: root, url: 'http://127.0.0.1:5007', username: 'u', password: 'p'}), 'utf8');
+ await assert.rejects(adapter.resolveSession({workspace: root}), /不支持会话列表/);
+ assert.equal(calls, 1);
+});
+
+test('prepareHost resolves a missing session only for adapters that support discovery', async t => {
+ const root = directory(t, 'prepare-host-'), credentialPath = path.join(root, 'seat.credential.json');
+ const adapters = {codearts: {
+  resolveSession: async binding => { assert.equal(binding.workspace, workspace); return 'resolved-session'; },
+  read: async binding => ({session: binding.session, workspace: binding.workspace, status: 'idle', messages: []})
+ }};
+ const binding = await prepareHost({provider: 'codearts', credentialPath}, {workspace, adapters});
+ assert.equal(binding.session, 'resolved-session');
+ assert.equal(binding.workspaceVerified, true);
+ await assert.rejects(prepareHost({provider: 'mimo', credentialPath}, {workspace, adapters: {mimo: {read: async () => ({session: 'x', workspace, status: 'idle', messages: []})}}}), /confirm real provider and session/);
 });

@@ -64,3 +64,11 @@ test('Werewolf human forms use private role projections and keep target/potion r
  game.phase='discuss';html=ui.werewolfActions(werewolfView(game,'p5'),{});assert.ok(html.includes('id="speechText" maxlength="600"'));
  game.phase='vote';html=ui.werewolfActions(werewolfView(game,'p5'),{});assert.ok(html.includes('value="p5"'));assert.ok(!ui.werewolfActions(werewolfView(game,'p5'),null).includes('<form'));
 });
+test('Werewolf stage script, stylesheet and fx overlay are wired into the page shell',()=>{
+ const html=read('public/index.html');
+ assert.ok(html.indexOf('/theme.js')<html.indexOf('/style.css'));
+ assert.ok(html.includes('href="/werewolf.css"'));
+ assert.ok(html.indexOf('/ui.js')<html.indexOf('/werewolf.js'));
+ assert.ok(html.indexOf('/werewolf.js')<html.indexOf('/app.js'));
+ assert.ok(html.includes('id="fx"'));
+});

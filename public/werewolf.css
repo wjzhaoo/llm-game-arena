@@ -1,0 +1,59 @@
+/* 狼人杀舞台 · 圆桌演出。颜色一律走 style.css 主题令牌。 */
+.stage{position:relative}
+.ww-stage{width:100%;display:flex;flex-direction:column;align-items:center;gap:14px}
+.ww-banner{width:100%;max-width:640px;text-align:center;padding:10px 16px;border-radius:11px;font-size:12px;line-height:1.8;background:linear-gradient(160deg,#fdf3d7,#f8e5b0);color:#6d4c12;border:1px solid var(--gold);letter-spacing:.5px}
+.ww-banner small{display:block;font-size:10px;color:var(--muted)}
+.ww-banner.night{background:linear-gradient(160deg,#223e36,#172b25);color:#dce8db;border-color:var(--border)}
+.ww-banner.night small{color:#9fb3a6}
+.ww-arena{position:relative;width:100%;max-width:620px;aspect-ratio:16/11}
+.ww-table{position:absolute;left:13%;right:13%;top:13%;bottom:13%;border-radius:50%;background:radial-gradient(circle at 50% 38%,#3a6b52,#20483a 68%,#183a2c);box-shadow:inset 0 0 0 6px #c8a24a33,inset 0 6px 24px #00000038,0 18px 40px #1c2f2430;transition:filter .8s ease}
+.ww-stage.ww-night .ww-table{filter:brightness(.55)}
+.ww-stage.ww-night .ww-arena::before{content:'';position:absolute;inset:-4% -3%;border-radius:26px;background:radial-gradient(62% 62% at 50% 46%,transparent 46%,#101d2466 100%);pointer-events:none;z-index:1}
+.ww-seat{position:absolute;width:118px;transform:translate(-50%,-50%);text-align:center;padding:12px 8px 10px;border-radius:14px;background:var(--card);border:1px solid var(--border);box-shadow:0 8px 20px #22382518;transition:opacity .5s ease,border-color .3s ease;z-index:2}
+.ww-seat strong{display:block;font-size:12px;letter-spacing:1px}
+.ww-seat small{display:block;font-size:10px;color:var(--muted);margin-top:6px}
+.ww-seat .seat-avatar{margin-bottom:8px}
+.ww-seat .seat-avatar .provider-avatar{width:46px;height:46px}
+.ww-seat.dead{opacity:.55;border-style:dashed}
+.ww-seat.dead .seat-avatar{filter:grayscale(1)}
+.ww-seat.speaking{border-color:var(--gold);animation:wwpulse 1.6s ease-out infinite}
+@keyframes wwpulse{0%{box-shadow:0 0 0 0 #c8a24a66}70%{box-shadow:0 0 0 14px #c8a24a00}100%{box-shadow:0 0 0 0 #c8a24a00}}
+.ww-spotlight{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(48%,300px);display:flex;justify-content:center;pointer-events:none;z-index:3}
+.ww-bubble{background:var(--card);border:1px solid var(--gold);border-radius:14px;padding:10px 14px;font-size:12px;line-height:1.7;box-shadow:0 14px 34px #1c2f2438;max-height:118px;overflow:hidden}
+.ww-bubble b{display:block;color:var(--gold);font-size:11px;letter-spacing:2px;margin-bottom:4px}
+.ww-bubble.pop{animation:wwpop .32s cubic-bezier(.2,1.4,.4,1)}
+@keyframes wwpop{from{transform:scale(.55);opacity:0}}
+
+/* 演出覆盖层：一次性动效只活在这里，#board 重渲染不影响 */
+#fx{position:absolute;inset:0;pointer-events:none;z-index:6;overflow:hidden}
+.fx-bubble{position:absolute;transform:translate(-50%,-115%);max-width:230px;background:var(--card);border:1px solid var(--gold);border-radius:12px;padding:8px 12px;font-size:12px;line-height:1.6;box-shadow:0 10px 26px #1c2f2430;transition:opacity .35s ease,transform .35s ease;animation:wwrise .28s ease}
+.fx-bubble b{color:var(--gold);margin-right:8px}
+.fx-bubble.out{opacity:0;transform:translate(-50%,-150%)}
+@keyframes wwrise{from{transform:translate(-50%,-95%);opacity:0}}
+.fx-banner{position:absolute;left:50%;top:36%;transform:translate(-50%,-50%);text-align:center;background:var(--card);border:1px solid var(--gold);border-radius:14px;padding:14px 30px;box-shadow:0 20px 50px #1c2f2440;animation:wwpop .3s cubic-bezier(.2,1.4,.4,1)}
+.fx-banner b{display:block;font-size:17px;letter-spacing:3px;margin-bottom:5px}
+.fx-banner span{font-size:12px;color:var(--muted)}
+.fx-banner.vote b{color:var(--vermilion)}
+.fx-dim{position:absolute;inset:0;display:grid;place-items:center;background:#0a101acc;animation:wwfade 1.45s ease forwards}
+.fx-dim span{font-size:22px;letter-spacing:8px;color:#e8ecf4;font-weight:600}
+.fx-dim.day{background:#fff3d6b8}
+.fx-dim.day span{color:#7a5c17}
+@keyframes wwfade{0%{opacity:0}18%{opacity:1}72%{opacity:1}100%{opacity:0}}
+.fx-ghost{position:absolute;transform:translate(-50%,-50%);padding:4px 10px;border-radius:9px;background:var(--vermilion);color:#fff;font-size:11px;font-weight:700;letter-spacing:2px;animation:wwghost 2.6s ease forwards}
+@keyframes wwghost{0%{transform:translate(-50%,-50%) scale(.4);opacity:0}18%{transform:translate(-50%,-50%) scale(1.15);opacity:1}70%{transform:translate(-50%,-90%);opacity:1}100%{transform:translate(-50%,-150%);opacity:0}}
+.fx-finale{position:absolute;left:50%;top:40%;transform:translate(-50%,-50%);text-align:center;background:var(--warn-bg);color:var(--warn-ink);border:1px solid var(--warn-border);border-radius:16px;padding:18px 32px;box-shadow:0 24px 60px #1c2f2445;animation:wwpop .4s cubic-bezier(.2,1.4,.4,1)}
+.fx-finale b{display:block;font-size:18px;letter-spacing:4px;margin-bottom:6px}
+.fx-finale span{font-size:12px}
+
+/* 事件流圆点补色（dawn / vote） */
+.event.dawn::before{background:#5b7fb8;box-shadow:0 0 5px #5b7fb888}
+.event.vote::before{background:#b23a2a;box-shadow:0 0 6px #b23a2a88}
+
+:root[data-theme="dark"] .ww-table{background:radial-gradient(circle at 50% 38%,#2c5340,#16352a 68%,#0f2a20);box-shadow:inset 0 0 0 6px #c9a86a2e,inset 0 6px 24px #00000080,0 18px 40px #00000070}
+:root[data-theme="dark"] .ww-banner{background:var(--warn-bg);color:var(--warn-ink);border-color:var(--warn-border)}
+:root[data-theme="dark"] .ww-banner.night{background:linear-gradient(160deg,#122019,#0b1712);color:#c9dcc9;border-color:var(--border)}
+:root[data-theme="dark"] .ww-banner.night small{color:#8aa391}
+:root[data-theme="dark"] .fx-dim{background:#000000d0}
+:root[data-theme="dark"] .fx-finale{box-shadow:0 24px 60px #00000080}
+
+@media(max-width:700px){.ww-seat{width:92px;padding:8px 5px}.ww-seat .seat-avatar .provider-avatar{width:36px;height:36px}.ww-spotlight{width:64%}.ww-banner{font-size:11px}.fx-dim span{font-size:17px;letter-spacing:5px}}

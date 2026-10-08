@@ -23,6 +23,10 @@ export const ArenaCodeArts = async ctx => {
    if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) return json(res, 401, {error: 'Unauthorized'});
    const url = new URL(req.url, 'http://127.0.0.1');
    if (req.method === 'GET' && url.pathname === '/v1/status') return json(res, 200, await call('status'));
+   if (req.method === 'GET' && url.pathname === '/v1/sessions') {
+    const list = await call('list');
+    return json(res, 200, (Array.isArray(list) ? list : []).filter(item => item && typeof item.id === 'string' && /^[A-Za-z0-9._:-]{4,200}$/.test(item.id) && typeof item.directory === 'string' && path.resolve(item.directory) === directory).map(item => ({id: item.id, directory})));
+   }
    const match = /^\/v1\/session\/([^/]+)(?:\/(messages|prompt))?$/.exec(url.pathname);
    if (!match) return json(res, 404, {error: 'Not found'});
    const id = decodeURIComponent(match[1]);

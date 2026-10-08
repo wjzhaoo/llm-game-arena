@@ -143,13 +143,6 @@ textarea{min-height:300px;font:12px/1.8 monospace;resize:vertical}
 .captured-chip{display:grid;place-items:center;width:27px;height:27px;border-radius:50%;font:700 13px/1 'STKaiti','KaiTi',serif;font-style:normal}
 .captured-chip.red{background:radial-gradient(circle at 34% 27%,#fffaf0,#f0d9a6);color:#a32d20;border:1.5px solid #a32d20;box-shadow:0 2px 4px #3b2a1040}
 .captured-chip.black{background:radial-gradient(circle at 34% 27%,#3a5158,#15262d);color:#f5e7c4;border:1.5px solid #617678;box-shadow:0 2px 4px #0a141866}
-.wolves{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;width:100%;padding:25px 0}
-.seat-card{border:1px solid #e0ddcb;background:linear-gradient(170deg,#fff,#faf8ef);border-radius:16px;padding:24px 12px;text-align:center;box-shadow:0 8px 20px #22382510}
-.seat-card .role-icon{font-size:30px;margin-bottom:12px;color:#a2822e}
-.seat-card strong{display:block;font-size:13px;letter-spacing:1px}
-.seat-card small{display:block;font-size:10px;color:#8d9c83;margin-top:9px}
-.seat-card.dead{opacity:.42}
-.night-banner{width:100%;padding:18px;border-radius:12px;background:linear-gradient(160deg,#223e36,#172b25);color:#dce8db;font-size:12px;text-align:center;line-height:1.9;box-shadow:inset 0 0 0 1px #c8a24a33}
 .reveal-warning{color:#a84e32;font-weight:600;margin-bottom:15px;padding:10px;background:#fdeedd;border-radius:8px;border:1px solid #e5b98a}
 .provider-avatar{display:grid;place-items:center;position:relative;width:42px;height:42px;flex:none;background:#fff;border:1px solid #e2ddc9;border-radius:12px;color:#172b24;overflow:hidden;box-shadow:0 3px 8px #22382514}
 .avatar-fallback{position:absolute;inset:0;display:grid;place-items:center;font:700 12px/1 system-ui}
@@ -158,8 +151,6 @@ textarea{min-height:300px;font:12px/1.8 monospace;resize:vertical}
 .avatar-image[hidden]{display:none}
 .seat-avatar{display:flex;justify-content:center;margin-bottom:14px}
 .seat-avatar .provider-avatar{width:50px;height:50px}
-.seat-card.dead .seat-avatar{filter:grayscale(1)}
-.seat-card.dead strong::after{content:' · 出局';font-size:10px}
 .admin-tasks{margin-top:24px;padding:22px 24px;background:var(--card);border:1px solid var(--border);border-radius:16px;box-shadow:0 14px 34px #22382512}
 .admin-tasks[hidden]{display:none}
 .admin-tasks h3{font-size:14px;margin:0 0 10px}
@@ -171,7 +162,7 @@ textarea{min-height:300px;font:12px/1.8 monospace;resize:vertical}
 button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid #005e9b;outline-offset:3px}
 button:disabled{opacity:1;color:var(--muted);background:#eef0e4;border-style:dashed}
 @media(max-width:1100px){main{padding:25px}.arena-grid{grid-template-columns:1fr}.sidepanel{display:block}.shell{grid-template-columns:224px 1fr}}
-@media(max-width:700px){header{padding:15px;height:auto;gap:10px}nav{display:none}.shell{display:block}aside{padding:15px;border-right:0}.aside-top,.aside-bottom{display:none}aside>.primary{margin:0}#matches{display:flex;overflow:auto}.room{min-width:160px}.headline h1{font-size:25px}main{padding:18px}.arena-grid{display:block}.toolbar{flex-wrap:wrap}#board{min-height:360px;padding:15px}.piece{font-size:22px}.transcript h3 small{display:block;margin:8px 0}.wolves{gap:10px}.seat-card{padding:16px 8px}.captured-tray{grid-template-columns:1fr}}
+@media(max-width:700px){header{padding:15px;height:auto;gap:10px}nav{display:none}.shell{display:block}aside{padding:15px;border-right:0}.aside-top,.aside-bottom{display:none}aside>.primary{margin:0}#matches{display:flex;overflow:auto}.room{min-width:160px}.headline h1{font-size:25px}main{padding:18px}.arena-grid{display:block}.toolbar{flex-wrap:wrap}#board{min-height:360px;padding:15px}.piece{font-size:22px}.transcript h3 small{display:block;margin:8px 0}.captured-tray{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
 
 /* Theme tokens: every surface, control, dialog and board shares the same palette. */
@@ -186,7 +177,7 @@ button:hover{background:var(--hover);border-color:var(--accent)}
 .primary,.primary:hover{background:linear-gradient(160deg,#2f7153,#1c4a35);color:#fff;border-color:#1c4a35}
 :root[data-theme="dark"] .primary,:root[data-theme="dark"] .primary:hover{background:linear-gradient(160deg,#3a7d5b,#245840);color:#f2fbf4;border-color:#3a7d5b}
 .brand b{background:linear-gradient(150deg,#2f7153,#173d2c);color:#fdf6e3}
-nav,nav i,.eyebrow,.aside-bottom,.aside-bottom small,.stage-top span:last-child,.sidepanel h3 span,.protocol span,.transcript h3 small,.event time,.seat-card small{color:var(--muted)}
+nav,nav i,.eyebrow,.aside-bottom,.aside-bottom small,.stage-top span:last-child,.sidepanel h3 span,.protocol span,.transcript h3 small,.event time{color:var(--muted)}
 .eyebrow,.brand small,.protocol span{color:var(--gold)}
 .room.active{background:var(--raised);border-color:var(--border);box-shadow:inset 3px 0 0 var(--gold)}
 .room{background:transparent}
@@ -205,11 +196,6 @@ dialog input,dialog select,textarea{background:var(--raised);color:var(--ink)}
 dialog::backdrop{background:#06110ecc}
 #notice:not(:empty),dialog .dialog-notice{background:var(--warn-bg);color:var(--warn-ink);border-color:var(--warn-border)}
 .dialog-notice:empty{display:none}dialog .dialog-notice{padding:12px 14px;border-radius:9px;font-size:12px;line-height:1.7;border:1px solid var(--warn-border)}
-.seat-card{background:var(--card);border-color:var(--border)}
-.seat-card .role-icon{color:var(--gold)}
-.seat-card.dead{opacity:1;border-style:dashed;color:var(--muted);filter:grayscale(.6)}
-.seat-card.dead .role-icon{text-decoration:line-through}
-.night-banner{background:linear-gradient(160deg,#223e36,#172b25);color:#dce8db;border:1px solid var(--border)}
 .reveal-warning{background:var(--warn-bg);border-color:var(--warn-border)}
 .theme-control select{background:var(--card);color:var(--ink);border-color:var(--border)}
 button:disabled{color:var(--muted);background:var(--raised)}

@@ -247,6 +247,33 @@ test('HTTP and actual CLI wake flow return parked promptly and protect managemen
  assert.equal(adapter.calls.at(-1).binding.session, 'ses_http-black');
 });
 
+test('CodeArts connect without a session resolves the host session, dedupes on it and keeps invitations on failure', async t => {
+ const f = fixture(t), id = f.arena.create({kind: 'xiangqi'}).id;
+ const codearts = host();
+ codearts.resolveSession = async binding => { assert.ok(path.isAbsolute(binding.workspace)); return 'resolved-codearts-session'; };
+ const others = () => Object.fromEntries(WAKE_PROVIDERS.filter(p => p !== 'codearts').map(p => [p, host()]));
+ const wake = new WakeService(f.arena, {adapters: {...others(), codearts}, readTimeoutMs: 100, sendTimeoutMs: 100});
+ t.after(() => wake.stop());
+ const invite = f.arena.invite(id, 'red', 'http://127.0.0.1:4318');
+ const input = {match: id, seat: 'red', invitation: invitationToken(invite), provider: 'codearts', credentialPath: path.join(f.root, 'red.credential.json')};
+ const out = await wake.connect(input);
+ assert.equal(out.continuationMode, 'wake');
+ assert.equal(f.arena.get(id).bindings.red.session, 'resolved-codearts-session');
+ assert.equal(f.arena.get(id).bindings.red.wake.session, 'resolved-codearts-session');
+ const other = f.arena.create({kind: 'xiangqi'}).id;
+ await assert.rejects(wake.connect({...input, match: other, invitation: invitationToken(f.arena.invite(other, 'red', 'http://127.0.0.1:4318'))}), /already bound/);
+ assert.ok(f.arena.get(other).invites.red, 'a failed duplicate must not consume the invitation');
+ const failing = host();
+ failing.resolveSession = async () => { throw Error('当前工作区有 2 个 CodeArts 会话，请显式传 --session 指定其一'); };
+ const wake2 = new WakeService(f.arena, {adapters: {...others(), codearts: failing}, readTimeoutMs: 100, sendTimeoutMs: 100});
+ t.after(() => wake2.stop());
+ const third = f.arena.create({kind: 'xiangqi'}).id, invite3 = f.arena.invite(third, 'red', 'http://127.0.0.1:4318');
+ await assert.rejects(wake2.connect({...input, match: third, invitation: invitationToken(invite3)}), /显式传 --session/);
+ assert.ok(f.arena.get(third).invites.red);
+ await assert.rejects(wake2.connect({...input, provider: 'mimo', match: third, invitation: invitationToken(invite3)}), /confirm real provider and session/);
+ assert.ok(f.arena.get(third).invites.red);
+});
+
 test('Manual wake uses verified capability, stale-binding protection and one in-flight send', async t => {
  const f=fixture(t),id=f.arena.create({kind:'xiangqi'}).id;await f.all(id);
  let d=f.wake.diagnostics(id).find(x=>x.seat==='red');assert.equal(d.canWake,false);assert.match(d.blockedReason,/尚未开始/);

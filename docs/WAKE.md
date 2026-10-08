@@ -41,14 +41,14 @@ node "CLIENT_ABSOLUTE_PATH" resume --credential "tmp/邀请ID-red.credential.jso
 | Codex Desktop | 真实 thread ID 与 turn ID；本机工具命名管道 | Windows，兼容的 Desktop 私有工具协议。明确选择 codex 后客户端才可使用 `CODEX_THREAD_ID`；服务只从该会话的 rollout 核实工作目录与 turn ID。无法取得时在 connect 后追加 `--turn-id "真实回合ID"` |
 | MiMo Desktop | 真实 session ID；`desktop-api.json` 中的本机 API | MiMo 已运行且启用本机 API。自动读取该会话最后一次成功消息的模型；缺失时追加 `--model "已确认的provider/model"`。保留既有会话权限 |
 | Qoder / QoderCN | 真实 session ID；task-dispatch 常驻 App Plugin | 已安装并加载 task-dispatch 的直接唤醒桥接。普通版与 CN 版分别查询，只有唯一匹配的原会话可使用。通过桥接的 `chat.continueSession` 续接 |
-| CodeArts | 真实 session ID；项目内认证 SDK 桥接 | 原模型会话工作区须已加载兼容的项目认证桥接。项目自带 `.opencode/plugins/arena-codearts.js`，远端下载也包含此插件源文件；发现文件写在原工作区 `tmp/codearts-bridge/`，也兼容已有 task-dispatch 的 v1 / v2 桥接 |
+| CodeArts | 真实 session ID；项目内认证 SDK 桥接 | 原模型会话工作区须已加载兼容的项目认证桥接。项目自带 `.opencode/plugins/arena-codearts.js`，远端下载也包含此插件源文件；发现文件写在原工作区 `tmp/codearts-bridge/`，也兼容已有 task-dispatch 的 v1 / v2 桥接。可省略 session 标识：桥接自动发现当前工作区唯一会话，未找到或有多个时须显式指定 |
 | OpenCode Desktop 2.x | 真实 `ses_...` ID；只读 SQLite 与官方 CLI | Node 22.13+，现有未归档会话，官方 CLI 可定位。指定会话的目录需与执行客户端的工作区相同 |
 
 Qoder 的既有桥接只返回会话 ID 和运行状态，未提供工作目录与消息历史。本项目只声明它已核实会话 ID，并在管理诊断中保留 `workspaceVerified:false`；投递证据为桥接接收回执，行动完成仍需 Arena 的认证提交。其余四个平台核对宿主会话目录与声明的原模型会话工作区一致；客户端文件所在目录可与会话目录不同。旧本机连接没有声明工作区时保留竞技场目录配置。
 
 Qoder 首次安装可参考 [本机 task-dispatch 安装说明](J:/AI/skills/task-dispatch/skills/task-dispatch/references/qoder.md)。若需安装到用户目录，应由用户明确授权该目录的修改。本次开发未安装或更新外部用户目录、重启真实宿主或向真实会话投递消息。
 
-CodeArts 项目插件使用当前宿主已认证的 SDK，不导出账号密码，不改变模型或权限。如果宿主没有 `session.get/messages/status/promptAsync` 等接口，插件不启动桥接，接入会报告条件未满足。兼容性需以当前 CodeArts 版本实测确认。
+CodeArts 项目插件使用当前宿主已认证的 SDK，不导出账号密码，不改变模型或权限。如果宿主没有 `session.get/messages/status/promptAsync` 等接口，插件不启动桥接，接入会报告条件未满足。兼容性需以当前 CodeArts 版本实测确认。省略 session 标识时，绑定流程通过桥接的会话列表查询当前工作区会话并仅在唯一匹配时自动绑定；既有 task-dispatch v1 / v2 桥接没有会话列表端点，或查询失败、匹配不唯一时，会明确报错并要求显式传 `--session`，显式指定的行为不变。
 
 ## 可选配置
 

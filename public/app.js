@@ -15,6 +15,11 @@ let current=initialUrl.searchParams.get('room'),match=null,admin='',replay=null;
 const validAuthToken=value=>typeof value==='string'&&/^[\x21-\x7e]+$/.test(value);
 const adminFormatMessage='管理码格式无效，请只复制终端中的管理码，不含中文说明、全角字符或空格';
 let playerData=null,humanJob=null,selectedCell=null,boardContext='',panelContext='',refreshing=false,submitting=false,clockOffset=0;
+let ww={room:null,seen:null,prevPhase:null,poppedId:null,player:null};
+function wwPlayer(){
+ if(!ww.player)ww.player=ArenaWerewolf.createPlayer({fx:$('fx'),board:$('board'),reducedMotion:matchMedia('(prefers-reduced-motion: reduce)').matches});
+ return ww.player;
+}
 let invitationRequest=0,invitationSeat=null,avatarManifest={},network={localOrigin:location.origin,lanOrigins:[]},autoJoin=true;
 const wakeRequests=new Set(),roomInvites=new Map();
 if(current&&new URLSearchParams(initialUrl.hash.slice(1)).has('join')){
@@ -289,6 +294,7 @@ function render(){
  $('replay').max=Math.max(0,match.history.length-1);$('replay').value=replay===null?Math.max(0,match.history.length-1):replay;
  $('replayLabel').textContent=replay===null?'实时 · '+match.history.length+' 条历史记录':'回放 '+(replay+1)+'/'+match.history.length+' · '+(match.history[replay]?.text||'');
  if(match.kind!=='werewolf'){
+  if(ww.room){wwPlayer().reset();ww.room=null;ww.seen=null;ww.prevPhase=null;ww.poppedId=null}
   const context=current+':'+replay+':'+g.ply;
   if(context!==boardContext){selectedCell=null;boardContext=context}
   const interactive=!!playerData&&replay===null,canAct=interactive&&!!humanJob&&!submitting&&!match.paused;
@@ -297,10 +303,22 @@ function render(){
   else if(focusTarget)$('board').querySelector('[data-target="'+focusTarget+'"]')?.focus({preventScroll:true});
  }else{
   const warning=$('reveal').checked&&replay===null?'<div class="reveal-warning">管理全知视图 · 包含隐藏身份，勿向选手分享</div>':'';
-  $('board').innerHTML=warning+'<div class="night-banner">'+(['night','wolf','seer','witch'].includes(g.phase)?'天黑请闭眼 · 私有行动仅对应角色可见':'天亮了 · 请根据公开线索讨论与投票')+'<br>普通观战不显示隐藏角色、夜间目标或验人结果</div><div class="wolves">'+g.players.map(p=>{
-   const participant=match.participants.find(item=>item.seat===p.id);
-   return '<div class="seat-card '+(!p.alive?'dead':'')+'"><div class="seat-avatar">'+(participant?.type==='human'?'<span class="provider-avatar human-avatar">真人</span>':ArenaUI.avatar(participant?.provider,avatarManifest))+'</div><strong>'+esc(p.id)+' 号玩家</strong><small>'+esc(p.role?ArenaUI.roleNames[p.role]:'身份隐藏')+' · '+(p.alive?'存活':'已出局')+'</small></div>';
-  }).join('')+'</div>';
+  const events=replay===null?match.events:match.history.slice(0,replay+1);
+  const {speaking,lastSpeech}=ArenaWerewolf.deriveSpeech(events,g);
+  const poppedBefore=ww.poppedId;
+  if(replay===null){
+   if(ww.room!==current||!ww.seen){
+    ww.room=current;ww.seen=new Set(events.map(ArenaWerewolf.eventKey));ww.prevPhase=g.phase;ww.poppedId=null;wwPlayer().reset();
+   }else{
+    const fresh=ArenaWerewolf.freshEvents(ww.seen,match.events);
+    for(const e of match.events)ww.seen.add(ArenaWerewolf.eventKey(e));
+    const list=ArenaWerewolf.directives(fresh,ww.prevPhase,g.phase);
+    ww.prevPhase=g.phase;
+    wwPlayer().enqueue(list);
+   }
+   if(lastSpeech)ww.poppedId=lastSpeech.id;
+  }else wwPlayer().reset();
+  $('board').innerHTML=warning+ArenaWerewolf.stage(g,match.participants,avatarManifest,{speaking,lastSpeech,poppedId:replay===null?poppedBefore:(lastSpeech?.id??null)});
  }
  $('count').textContent=match.participants.filter(p=>p.connected).length+' / '+match.participants.length;
  $('players').innerHTML=match.participants.map(p=>{
