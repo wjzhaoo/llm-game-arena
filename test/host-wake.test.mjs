@@ -18,6 +18,9 @@ test('Codex pipe payload uses the bound thread and turn; send requires user-mess
  const adapter = new CodexWake({pipe: 'fixture-pipe', rpcImpl: async (pipe, request) => {
   calls.push(request);
   const {tool, arguments: args} = request.params;
+  // Desktop 26.930 rejects missing callerSource before invoking the tool.
+  if (request.params.callerSource !== 'codex' || (tool === 'read_thread' && args.turnLimit > 10)) return {error: {code: -32602, message: 'Invalid app tool request'}};
+  assert.equal(request.params.hostId, 'local');
   assert.equal(request.params.threadId, session);
   assert.equal(request.params.turnId, turnId);
   if (tool === 'send_message_to_thread') { messages.push({type: 'userMessage', content: [{text: args.prompt}]}); return {result: {success: true, contentItems: [{type: 'inputText', text: '{}'}]}}; }
@@ -28,6 +31,21 @@ test('Codex pipe payload uses the bound thread and turn; send requires user-mess
  assert.equal((await adapter.send(binding, prompt, marker)).delivered, true);
  assert.equal(calls.filter(c => c.params.tool === 'send_message_to_thread').length, 1);
  await assert.rejects(adapter.send({...binding, canSend: () => false}, prompt, marker), error => error.safeToRetry === true);
+});
+
+test('Codex preserves protocol rejection details and refuses unconfirmed Desktop results', async () => {
+ const binding = {session: 'fixture-codex-session', turnId: 'fixture-turn', workspace};
+ for (const [response, expected] of [
+  [{error: {code: -32602, message: 'Invalid app tool request'}}, /-32602.*Invalid app tool request/],
+  [{result: {success: false, contentItems: [{type: 'inputText', text: '{}'}]}}, /did not return success:true/],
+  [{result: {contentItems: [{type: 'inputText', text: '{}'}]}}, /did not return success:true/],
+ ]) {
+  let calls = 0;
+  const adapter = new CodexWake({pipe: 'fixture-pipe', rpcImpl: async () => { calls++; return response; }});
+  await assert.rejects(adapter.read(binding), expected);
+  assert.equal(calls, 1);
+  assert.equal(adapter.pipe, null);
+ }
 });
 
 test('Codex resolves a real turn from the current session log and rejects workspace mismatch', async t => {

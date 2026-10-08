@@ -15,7 +15,7 @@
   return '<span class="provider-avatar" title="'+esc(label)+(info?.kind?.includes('fallback')?' · 文字占位标识':'')+'"><span class="avatar-fallback" aria-hidden="'+(safeSource?'true':'false')+'">'+esc(fallback)+'</span>'+(safeSource?'<img class="avatar-image" src="'+esc(safeSource)+'" alt="'+esc(label)+(info.kind?.includes('fallback')?'文字标识':'图标')+'" width="32" height="32" loading="lazy">':'')+'</span>';
  }
  function pieceButton({red,glyph,xy,active,flipped,covered=false,coverGlyph='',label}){
-  return '<button type="button" class="piece '+(red?'red':'black')+(covered?' covered':'')+(active?' selected':'')+'" style="'+position(xy,flipped)+'" data-cell="'+xy.join(',')+'" aria-pressed="'+active+'" aria-label="'+esc(label)+'"><i class="piece-ring" aria-hidden="true"></i><span class="piece-glyph">'+glyph+'</span>'+(covered?'<span class="piece-cover" aria-hidden="true">'+coverGlyph+'</span>':'')+'<span class="piece-side" aria-hidden="true">'+(red?'红':'黑')+'</span></button>';
+  return '<button type="button" class="piece '+(red?'red':'black')+(covered?' covered':'')+(active?' selected':'')+'" style="'+position(xy,flipped)+'" data-cell="'+xy.join(',')+'" aria-pressed="'+active+'" aria-label="'+esc(label)+'"><i class="piece-ring" aria-hidden="true"></i><span class="piece-glyph">'+glyph+'</span>'+(covered?'<span class="piece-cover" aria-hidden="true">'+coverGlyph+'</span>':'')+'</button>';
  }
  function chess(view,selected,options={}){
   const blind=view.game==='blind',flipped=options.side==='black',selection=cell(selected)?selected:null;
