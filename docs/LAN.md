@@ -52,13 +52,14 @@ flowchart LR
 | `POST /api/participant-type` | 管理码；设置 `human / ai` |
 | `POST /api/room-invite` | 管理码；生成多人房间链接 |
 | `POST /api/player`，`action: join` | 房间邀请；昵称和空闲真人席位 |
-| `POST /api/player`，`status / claim / submit / resign` | 本人真人 Bearer 凭据；仅棋类认输 |
+| `POST /api/player`，`status / claim / submit / emote / undo-request / resign` | 本人真人 Bearer 凭据；棋类互动与悔棋确认 |
+| `POST /desktop`，`emote / undo-request / resign` | 本人 AI Bearer 凭据；原领取与提交流程处理悔棋确认 |
 | `POST /api/connect` | AI 专属邀请；`wakeTransport: local / relay` |
 | `POST /api/relay`，`poll / report / check` | 独立转接 Bearer 凭据 |
 | `GET /api/network` | 本机与局域网地址 |
 | `GET /api/client-manifest`、`/downloads/…` | 固定文件白名单与 SHA-256，不下载服务器或数据 |
 
-行动 JSON、task ID、attempt ID 和回执沿用既有协议。Host 按实际端口和网卡地址限制；浏览器带 Origin 的请求必须同源。宿主桥接仍限当地 loopback。默认 HTTP 面向可信局域网，公网 TLS 和账号系统不在此版范围。
+普通行棋 JSON、task ID、attempt ID 和回执沿用既有协议；棋类新增 `boardRevision` 与 `kind: move / undo-response`。悔棋申请携带版本，确认通过原 `submit` 提交 `{type:"undo-response",requestId,accept}`。命令与规则详见 [棋类 3D 与互动说明](CHESS-3D-INTERACTIONS.md)。Host 按实际端口和网卡地址限制；浏览器带 Origin 的请求必须同源。宿主桥接仍限当地 loopback。默认 HTTP 面向可信局域网，公网 TLS 和账号系统不在此版范围。
 
 旧存档原子迁移：缺失席位类型补 AI，缺失唤醒方式补 local，保留原凭据、历史和期限。旧独立裁判迁移继续保留。先停止旧服务、备份数据目录再升级，避免两版同时写入。
 

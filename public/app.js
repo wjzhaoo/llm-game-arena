@@ -15,6 +15,7 @@ let current=initialUrl.searchParams.get('room'),match=null,admin='',replay=null;
 const validAuthToken=value=>typeof value==='string'&&/^[\x21-\x7e]+$/.test(value);
 const adminFormatMessage='管理码格式无效，请只复制终端中的管理码，不含中文说明、全角字符或空格';
 let playerData=null,humanJob=null,selectedCell=null,boardContext='',panelContext='',refreshing=false,submitting=false,clockOffset=0;
+let chessStage=null,chessMode='2d',interactionBusy=false;
 let ww={room:null,seen:null,prevPhase:null,poppedId:null,player:null};
 function wwPlayer(){
  if(!ww.player)ww.player=ArenaWerewolf.createPlayer({fx:$('fx'),board:$('board'),reducedMotion:matchMedia('(prefers-reduced-motion: reduce)').matches});
@@ -126,7 +127,7 @@ async function participantAction(button){
  $('copyInvite').textContent='复制邀请';$('inviteDialog').showModal();await loadInvitation();
 }
 $('themePreference').value=ArenaTheme.preference;
-$('themePreference').onchange=event=>ArenaTheme.set(event.target.value);
+$('themePreference').onchange=event=>{ArenaTheme.set(event.target.value);if(match)render()};
 document.addEventListener('error',event=>{if(event.target instanceof HTMLImageElement&&event.target.classList.contains('avatar-image')){event.target.hidden=true;event.target.previousElementSibling?.setAttribute('aria-hidden','false')}},true);
 for(const button of document.querySelectorAll('[data-close]'))button.onclick=()=>$(button.dataset.close).close();
 $('adminButton').onclick=()=>$('adminDialog').showModal();
@@ -192,18 +193,21 @@ $('taskList').onclick=event=>safe(async()=>{
 });
 $('board').onclick=event=>safe(async()=>{
  const button=event.target.closest('[data-cell],[data-target]');if(!button)return;
- if(button.dataset.cell){
-  const cell=button.dataset.cell.split(',').map(Number),g=replay===null?match.game:match.history[replay]?.game;
+ await chessSquare((button.dataset.cell||button.dataset.target).split(',').map(Number),!!button.dataset.target);
+});
+async function chessSquare(cell,target=false){
+ const g=replay===null?match.game:match.history[replay]?.game;if(!g||!ArenaUI.cell(cell))return;
+ if(!target){
   if(playerData&&replay===null){
    const p=g.board[cell[1]][cell[0]],side=typeof p==='string'?(p[0]==='r'?'red':'black'):p?.side;
    if(side!==playerData.seat)return;
   }
   selectedCell=selectedCell?.join(',')===cell.join(',')?null:cell;render();return;
  }
- if(!playerData||replay!==null){$('boardInstruction').textContent='目标 '+button.dataset.target+'：仅预览，不提交棋步';return}
- if(!humanJob||submitting)return;
- await submitHuman({from:selectedCell,to:button.dataset.target.split(',').map(Number)});
-});
+ if(!playerData||replay!==null){$('boardInstruction').textContent='目标 '+cell+'：仅预览，不提交棋步';return}
+ if(!humanJob||humanJob.kind==='undo-response'||match.undoRequest||submitting||match.paused)return;
+ await submitHuman({from:selectedCell,to:cell});
+}
 $('board').onkeydown=event=>{if(event.key==='Escape'){selectedCell=null;render()}};
 $('playerControls').onsubmit=event=>{event.preventDefault();safe(async()=>{
  const target=$('actionTarget')?.value||null,phase=playerData?.privateView.phase;
@@ -216,10 +220,17 @@ $('playerControls').onsubmit=event=>{event.preventDefault();safe(async()=>{
  }else result={type:({wolf:'kill',seer:'inspect',vote:'vote'})[phase],target};
  await submitHuman(result);
 })};
-$('playerControls').onclick=event=>{if(event.target.closest('[data-resign]'))safe(async()=>{
- if(!confirm('确认认输？本局将立即结束。'))return;
- const me=credential();await api('/api/player',{action:'resign'},false,me.token);await refresh();
-})};
+$('playerControls').onclick=event=>safe(async()=>{
+ const button=event.target.closest('[data-resign],[data-undo],[data-undo-answer],[data-emote]');
+ if(!button||button.disabled||interactionBusy||submitting||replay!==null||match.paused)return;
+ if(button.hasAttribute('data-undo-answer')){await submitHuman({type:'undo-response',requestId:match.undoRequest.id,accept:button.dataset.undoAnswer==='true'});return}
+ if(button.hasAttribute('data-resign')&&!confirm('确认认输？本局将立即结束。'))return;
+ const me=credential();if(!me)return;const room=current;interactionBusy=true;button.disabled=true;
+ try{
+  const body=button.hasAttribute('data-resign')?{action:'resign'}:button.hasAttribute('data-undo')?{action:'undo-request',boardRevision:match.boardRevision}:{action:'emote',emote:button.dataset.emote};
+  await api('/api/player',body,false,me.token);selectedCell=null;
+ }finally{interactionBusy=false;panelContext='';if(current===room)await refresh()}
+});
 async function submitHuman(result){
  if(submitting||replay!==null||!humanJob||!playerData||match.paused)return;
  const room=current,me=credential(),job=humanJob;submitting=true;
@@ -245,7 +256,7 @@ async function refresh(){
   if(me)$('reveal').checked=false;
   const data=await api('/api/matches/'+encodeURIComponent(room)+($('reveal').checked?'?reveal=1':''),null,$('reveal').checked);
   if(current!==room)return;
-  match=data;playerData=null;
+  match=data;playerData=null;if(Number.isFinite(data.serverNow))clockOffset=data.serverNow-Date.now();
   if(me){
    try{
     const status=await api('/api/player',{action:'status'},false,me.token);
@@ -285,7 +296,8 @@ function render(){
  $('title').textContent=match.title;$('subtitle').textContent=kinds[match.kind]+' · 真人与 AI 同席 · 规则引擎校验';
  $('status').textContent=match.paused?'房主已暂停':g.status==='finished'?'已结束 · '+(g.winner||'平局'):match.started?'正在进行':'等待选手';
  $('gameKind').textContent=match.kind.toUpperCase();
- $('phase').textContent=match.kind==='werewolf'?'第 '+g.round+' 轮 · '+({night:'夜间行动',wolf:'狼人行动',seer:'预言家行动',witch:'女巫行动',discuss:'白天讨论',vote:'放逐投票',finished:'已结束'})[g.phase]:(g.turn==='red'?'红方':'黑方')+'行棋 · 第 '+(g.ply||0)+' 手';
+ const frame=replay===null?match:match.history[replay],chessPhase=g.status==='finished'?'本局已结束':frame?.paused?'比赛已暂停':frame?.undoRequest?'等待'+seatTitle(frame.undoRequest.responder)+'确认悔棋':!(frame?.started??match.started)?'等待开局':(g.turn==='red'?'红方':'黑方')+'行棋';
+ $('phase').textContent=match.kind==='werewolf'?'第 '+g.round+' 轮 · '+({night:'夜间行动',wolf:'狼人行动',seer:'预言家行动',witch:'女巫行动',discuss:'白天讨论',vote:'放逐投票',finished:'已结束'})[g.phase]:chessPhase+' · 第 '+(g.ply||0)+' 手';
  $('live').textContent=replay===null?'● LIVE':'◷ REPLAY';
  $('startButton').disabled=!admin||match.started||finished||match.participants.some(p=>!p.connected);
  $('pauseButton').disabled=!admin||!match.started||finished;$('pauseButton').textContent=match.paused?'继续比赛':'暂停比赛';
@@ -295,13 +307,19 @@ function render(){
  $('replayLabel').textContent=replay===null?'实时 · '+match.history.length+' 条历史记录':'回放 '+(replay+1)+'/'+match.history.length+' · '+(match.history[replay]?.text||'');
  if(match.kind!=='werewolf'){
   if(ww.room){wwPlayer().reset();ww.room=null;ww.seen=null;ww.prevPhase=null;ww.poppedId=null}
-  const context=current+':'+replay+':'+g.ply;
+  const context=current+':'+replay+':'+g.ply+':'+match.boardRevision+':'+(match.undoRequest?.id||'');
   if(context!==boardContext){selectedCell=null;boardContext=context}
-  const interactive=!!playerData&&replay===null,canAct=interactive&&!!humanJob&&!submitting&&!match.paused;
-  $('board').innerHTML=ArenaUI.chess(g,selectedCell,{interactive,canAct,side:playerData?.seat});
+  const interactive=!!playerData&&replay===null,canAct=interactive&&!!humanJob&&humanJob.kind!=='undo-response'&&!match.undoRequest&&!submitting&&!match.paused;
+  const snapshot=replay===null?match:match.history[replay];
+  const boardOptions={room:current,interactive,canAct,side:playerData?.seat,started:snapshot?.started??match.started,paused:snapshot?.paused??false,undoRequest:snapshot?.undoRequest||null,replay:replay!==null,replayIndex:replay,events:replay===null?match.events:snapshot?.type==='emote'?[snapshot]:[],now:Date.now()+clockOffset};
+  if(globalThis.ArenaChess){
+   if(!chessStage)chessStage=new ArenaChess.Stage($('board'),{mode:chessMode,onMode:mode=>chessMode=mode,onPick:(cell,target)=>safe(()=>chessSquare(cell,target)),onFailure:notify});
+   chessStage.update(g,selectedCell,boardOptions);
+  }else $('board').innerHTML=ArenaUI.chess(g,selectedCell,boardOptions);
   if(focusCell)$('board').querySelector('[data-cell="'+focusCell+'"]')?.focus({preventScroll:true});
   else if(focusTarget)$('board').querySelector('[data-target="'+focusTarget+'"]')?.focus({preventScroll:true});
  }else{
+  if(chessStage){chessStage.destroy();chessStage=null}
   const warning=$('reveal').checked&&replay===null?'<div class="reveal-warning">管理全知视图 · 包含隐藏身份，勿向选手分享</div>':'';
   const events=replay===null?match.events:match.history.slice(0,replay+1);
   const {speaking,lastSpeech}=ArenaWerewolf.deriveSpeech(events,g);
@@ -323,7 +341,9 @@ function render(){
  $('count').textContent=match.participants.filter(p=>p.connected).length+' / '+match.participants.length;
  $('players').innerHTML=match.participants.map(p=>{
   const d=match.connections?.find(c=>c.seat===p.seat),control=ArenaUI.wakeControl(d,wakeRequests.has(current+':'+p.seat));
-  return '<div class="player">'+(p.type==='human'?'<span class="provider-avatar human-avatar">真人</span>':ArenaUI.avatar(p.provider,avatarManifest))+'<div class="player-meta"><strong>'+seatTitle(p.seat)+'</strong><small>'+esc(connectionText(p))+'</small>'+(d?.error?'<small>'+esc(d.error)+'</small>':'')+'</div><div class="participant-actions"><select class="participant-type" data-participant-type="'+p.seat+'" aria-label="'+seatTitle(p.seat)+'类型" '+(!admin||match.started||p.connected||finished?'disabled':'')+'><option value="ai" '+(p.type==='ai'?'selected':'')+'>AI</option><option value="human" '+(p.type==='human'?'selected':'')+'>真人</option></select>'+(control?'<button class="wake-button" data-wake-seat="'+p.seat+'" '+(control.disabled?'disabled':'')+' title="'+esc(control.reason)+'">'+esc(control.label)+'</button>':'')+'<button data-seat="'+p.seat+'" '+((p.connected||p.type==='ai')&&!admin||p.type==='human'&&!p.connected&&!!credential()||finished?'disabled':'')+'>'+(p.connected?'撤销':p.type==='human'?'加入'+(p.seat==='red'?'红方':p.seat==='black'?'黑方':p.seat.slice(1)+' 号席位'):'邀请 AI')+'</button></div></div>';
+  const frame=replay===null?match:match.history[replay],chess=match.kind!=='werewolf',active=chess&&g.status!=='finished'&&(frame?.started??match.started)&&!frame?.paused&&!frame?.undoRequest&&g.turn===p.seat,confirming=chess&&frame?.undoRequest?.responder===p.seat;
+  const tag=active?(replay!==null?'回放行棋方':playerData?.seat===p.seat?'轮到你':'正在行棋'):confirming?'等待确认悔棋':'';
+  return '<div class="player'+(active?' chess-active':'')+(confirming?' chess-confirming':'')+'">'+(p.type==='human'?'<span class="provider-avatar human-avatar">真人</span>':ArenaUI.avatar(p.provider,avatarManifest))+'<div class="player-meta"><strong>'+seatTitle(p.seat)+'</strong>'+(tag?'<span class="seat-turn-tag">'+tag+'</span>':'')+'<small>'+esc(connectionText(p))+'</small>'+(d?.error?'<small>'+esc(d.error)+'</small>':'')+'</div><div class="participant-actions"><select class="participant-type" data-participant-type="'+p.seat+'" aria-label="'+seatTitle(p.seat)+'类型" '+(!admin||match.started||p.connected||finished?'disabled':'')+'><option value="ai" '+(p.type==='ai'?'selected':'')+'>AI</option><option value="human" '+(p.type==='human'?'selected':'')+'>真人</option></select>'+(control?'<button class="wake-button" data-wake-seat="'+p.seat+'" '+(control.disabled?'disabled':'')+' title="'+esc(control.reason)+'">'+esc(control.label)+'</button>':'')+'<button data-seat="'+p.seat+'" '+((p.connected||p.type==='ai')&&!admin||p.type==='human'&&!p.connected&&!!credential()||finished?'disabled':'')+'>'+(p.connected?'撤销':p.type==='human'?'加入'+(p.seat==='red'?'红方':p.seat==='black'?'黑方':p.seat.slice(1)+' 号席位'):'邀请 AI')+'</button></div></div>';
  }).join('');
  $('adminTasks').hidden=!match.admin;const tasks=match.admin?.tasks||[];
  $('taskList').innerHTML=tasks.length?tasks.map(t=>'<div class="admin-task"><span>'+esc(t.message||'系统异常')+'<small>'+esc(({pending:'待处理',retried:'已允许重试',resolved:'已解决',closed:'已关闭'})[t.status])+'</small></span>'+(t.canRetry?'<button data-retry-task="'+esc(t.id)+'">允许一次重试</button>':'')+'</div>').join(''):'<p class="muted">暂无系统异常待办</p>';
@@ -334,17 +354,21 @@ function render(){
 function renderPlayerPanel(){
  const panel=$('playerControls');panel.hidden=!playerData||replay!==null;
  if(panel.hidden){panel.innerHTML='';panelContext='';return}
- const key=JSON.stringify([current,humanJob?.taskId,humanJob?.attemptId,playerData.privateView.self,match.paused,match.started,match.game.status]);
+ const key=JSON.stringify([current,humanJob?.taskId,humanJob?.attemptId,playerData.privateView.self,match.paused,match.started,match.game.status,playerData.interactions?.undo,playerData.interactions?.emoteAvailableAt,match.undoRequest?.id]);
  if(key!==panelContext){
   panelContext=key;
-  const status=match.paused?'比赛已暂停':!match.started?'等待房主开始比赛':match.game.status==='finished'?'本局已结束':humanJob?'轮到你行动':'等待其他选手行动';
-  panel.innerHTML='<div class="turn-clock" id="turnClock"></div><p>'+seatTitle(playerData.seat)+' · '+status+'</p>'+(match.kind==='werewolf'?ArenaUI.werewolfActions(playerData.privateView,match.paused?null:humanJob):'<h3>你执'+(playerData.seat==='red'?'红方':'黑方')+'，点击棋子和合法目标完成落子</h3>'+(match.started&&match.game.status!=='finished'?'<button data-resign '+(match.paused?'disabled':'')+'>认输</button>':''));
+  const status=match.paused?'比赛已暂停':!match.started?'等待房主开始比赛':match.game.status==='finished'?'本局已结束':match.undoRequest?'等待悔棋确认':humanJob?'轮到你行动':'等待其他选手行动';
+  const response=humanJob?.kind==='undo-response'?'<div class="undo-response"><p>对方请求撤回 '+match.undoRequest.plies+' 手，是否同意？</p><div class="actions"><button data-undo-answer="true" '+(match.paused?'disabled':'')+'>同意悔棋</button><button data-undo-answer="false" '+(match.paused?'disabled':'')+'>拒绝悔棋</button></div></div>':'';
+  const chessControls=globalThis.ArenaChess?ArenaChess.controls(playerData.interactions,match.paused||!match.started||match.game.status==='finished',Date.now()+clockOffset):'<button data-resign '+(match.paused?'disabled':'')+'>认输</button>';
+  panel.innerHTML='<div class="turn-clock" id="turnClock"></div><p>'+seatTitle(playerData.seat)+' · '+status+'</p>'+(match.kind==='werewolf'?ArenaUI.werewolfActions(playerData.privateView,match.paused?null:humanJob):(!match.undoRequest&&humanJob&&!match.paused?'<h3>你执'+(playerData.seat==='red'?'红方':'黑方')+'，点击棋子和合法目标完成落子</h3>':'')+response+chessControls);
  }
  updateClock();
 }
 function updateClock(){
  const clock=$('turnClock');if(!clock)return;
- clock.textContent=match?.paused?'计时已冻结':humanJob?'本次行动剩余 '+Math.max(0,Math.ceil((humanJob.deadline-Date.now()-clockOffset)/1000))+' 秒':'';
+ const request=match?.undoRequest,deadline=request?.deadline||humanJob?.deadline;
+ clock.textContent=match?.paused?'计时已冻结':deadline?(request?'悔棋确认剩余 ':'本次行动剩余 ')+Math.max(0,Math.ceil((deadline-Date.now()-clockOffset)/1000))+' 秒'+(request?' · 走棋计时冻结':''):'';
+ if(playerData?.interactions&&match?.started&&!match.paused&&match.game.status!=='finished')for(const button of $('playerControls').querySelectorAll?.('[data-emote]')||[])button.disabled=interactionBusy||playerData.interactions.emoteAvailableAt>Date.now()+clockOffset;
 }
 safe(async()=>{
  [network,avatarManifest]=await Promise.all([api('/api/network'),api('/assets/avatars/manifest.json').catch(()=>({}))]);

@@ -45,7 +45,7 @@ try{
   // Explicit allowlist: never print either token, local bridge config, or session ID.
   console.log(JSON.stringify({connected:true,seat:out.seat,credential:credentialPath,continuationMode:out.continuationMode,nextAction:out.nextAction,parked:out.parked,idle:out.idle,completed:out.completed,...(out.job?{job:out.job}:{})},null,2));
  }else{
-  if(!['claim','resume','submit','status','park','wake-bind'].includes(command))throw Error('Commands: connect, claim, resume, submit, status, park, wake-bind. See README.');
+  if(!['claim','resume','submit','status','park','wake-bind','emote','undo-request','resign'].includes(command))throw Error('Commands: connect, claim, resume, submit, status, park, wake-bind, emote, undo-request, resign. See README.');
   const credentialPath=path.resolve(opts.credential),credential=JSON.parse(fs.readFileSync(credentialPath,'utf8'));
   if(credential.relayCredentialPath){
    if(command==='wake-bind'){
@@ -59,6 +59,8 @@ try{
   }
   const body={action:command,credentialPath,...(opts.workspace||credential.workspace?{workspace:path.resolve(opts.workspace||credential.workspace)}:{}),...(opts.provider?{provider:opts.provider}:{}),...(opts.model?{model:opts.model}:{}),...(opts['turn-id']?{turnId:opts['turn-id']}: {})};
   if(command==='submit')Object.assign(body,{taskId:opts.task,attemptId:opts.attempt,result:JSON.parse(fs.readFileSync(opts.file,'utf8'))});
+  if(command==='emote'){if(!opts.emote)throw Error('--emote fixed id required');body.emote=opts.emote}
+  if(command==='undo-request'){if(!/^\d+$/.test(opts.revision||''))throw Error('--revision boardRevision required');body.boardRevision=Number(opts.revision)}
   let out;const until=Date.now()+60000;
   do{
    out=await postArena(credential.url+'/desktop',body,credential.token);

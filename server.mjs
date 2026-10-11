@@ -12,7 +12,7 @@ import {relayInvitation} from './lib/invitation.mjs';
 
 const here=path.dirname(fileURLToPath(import.meta.url));
 export const clientFiles=['client.mjs','relay-client.mjs','lib/network.mjs','lib/relay-worker.mjs','lib/wake/common.mjs','lib/wake/host.mjs','lib/wake/index.mjs','lib/wake/codex.mjs','lib/wake/mimo.mjs','lib/wake/qoder.mjs','lib/wake/codearts.mjs','lib/wake/opencode.mjs','.opencode/plugins/arena-codearts.js'];
-const publicFiles=new Set(['index.html','app.js','ui.js','werewolf.js','theme.js','style.css','werewolf.css','assets/avatars/manifest.json']);
+const publicFiles=new Set(['index.html','app.js','ui.js','chess-ui.js','chess3d.mjs','chess-coordinates.mjs','chess.css','vendor/three/three.module.js','vendor/three/OrbitControls.js','werewolf.js','theme.js','style.css','werewolf.css','assets/avatars/manifest.json']);
 const mime=file=>file.endsWith('.html')?'text/html; charset=utf-8':/\.(?:m?js)$/.test(file)?'text/javascript; charset=utf-8':file.endsWith('.svg')?'image/svg+xml':file.endsWith('.png')?'image/png':file.endsWith('.json')?'application/json; charset=utf-8':'text/css; charset=utf-8';
 
 export async function serve({port=Number(process.env.PORT||4318),host=process.env.HOST||'0.0.0.0',root=process.env.ARENA_DATA||path.join(here,'.arena'),adminToken=process.env.ARENA_ADMIN_TOKEN||randomBytes(32).toString('hex'),wakeOptions={},arenaOptions={},autoTick=true,interfaces}={}){
@@ -65,6 +65,8 @@ export async function serve({port=Number(process.env.PORT||4318),host=process.en
     if(v.action==='claim')return reply(200,arena.claim(identity));
     if(v.action==='submit')return reply(200,arena.submit(identity,v));
     if(v.action==='resign')return reply(200,arena.resign(identity));
+    if(v.action==='emote')return reply(200,arena.emote(identity,v));
+    if(v.action==='undo-request')return reply(200,arena.requestUndo(identity,v));
     throw Error('Unknown player action');
    }
    if(url.pathname==='/api/relay'){
@@ -86,7 +88,10 @@ export async function serve({port=Number(process.env.PORT||4318),host=process.en
     if(v.action==='park')return reply(200,arena.park(identity));
     if(v.action==='wake-bind')return reply(200,await wake.bind(identity,v));
     if(v.action==='submit')return reply(200,arena.submit(identity,v));
-    if(v.action==='status')return reply(200,{...arena.public(arena.get(identity.match)),privateView:arena.view(arena.get(identity.match),identity.seat),connection:wake.diagnostics(identity.match).find(c=>c.seat===identity.seat)});
+    if(v.action==='resign')return reply(200,arena.resign(identity));
+    if(v.action==='emote')return reply(200,arena.emote(identity,v));
+    if(v.action==='undo-request')return reply(200,arena.requestUndo(identity,v));
+    if(v.action==='status')return reply(200,{...arena.public(arena.get(identity.match)),privateView:arena.view(arena.get(identity.match),identity.seat),interactions:arena.interactions(arena.get(identity.match),identity.seat),connection:wake.diagnostics(identity.match).find(c=>c.seat===identity.seat)});
     throw Error('Unknown desktop action');
    }
    admin();
