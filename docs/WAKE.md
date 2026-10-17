@@ -41,14 +41,16 @@ node "CLIENT_ABSOLUTE_PATH" resume --credential "tmp/邀请ID-red.credential.jso
 | Codex Desktop | 真实 thread ID 与 turn ID；本机工具命名管道 | Windows，兼容的 Desktop 私有工具协议。明确选择 codex 后客户端才可使用 `CODEX_THREAD_ID`；服务只从该会话的 rollout 核实工作目录与 turn ID。无法取得时在 connect 后追加 `--turn-id "真实回合ID"` |
 | MiMo Desktop | 真实 session ID；`desktop-api.json` 中的本机 API | MiMo 已运行且启用本机 API。自动读取该会话最后一次成功消息的模型；缺失时追加 `--model "已确认的provider/model"`。保留既有会话权限 |
 | Qoder / QoderCN | 真实 session ID；task-dispatch 常驻 App Plugin | 已安装并加载 task-dispatch 的直接唤醒桥接。普通版与 CN 版分别查询，只有唯一匹配的原会话可使用。通过桥接的 `chat.continueSession` 续接 |
-| CodeArts | 真实 session ID；项目内认证 SDK 桥接 | 原模型会话工作区须已加载兼容的项目认证桥接。项目自带 `.opencode/plugins/arena-codearts.js`，远端下载也包含此插件源文件；发现文件写在原工作区 `tmp/codearts-bridge/`，也兼容已有 task-dispatch 的 v1 / v2 桥接。可省略 session 标识：桥接自动发现当前工作区唯一会话，未找到或有多个时须显式指定 |
-| OpenCode Desktop 2.x | 真实 `ses_...` ID；只读 SQLite 与官方 CLI | Node 22.13+，现有未归档会话，官方 CLI 可定位。指定会话的目录需与执行客户端的工作区相同 |
+| CodeArts | 真实 session ID；项目内认证 SDK 桥接 | 原模型会话工作区须已加载兼容的项目认证桥接。项目自带 `.opencode/plugins/arena-codearts.js`，远端下载也包含此插件源文件；发现文件写在原工作区 `tmp/codearts-bridge/`，也兼容已有 task-dispatch 的 v1 / v2 桥接。可省略 session 标识：优先只读本机 SQLite，按本次邀请的用户消息正文精确定位并核对工作目录，支持多个历史会话；无数据库时兼容桥接唯一会话发现 |
+| OpenCode Desktop 2.x | 真实 `ses_...` ID；显式选择 opencode 后可省略 `--session`，客户端读取宿主的 `OPENCODE_SESSION_ID`；只读 SQLite 与官方 CLI | Node 22.13+，现有未归档会话，官方 CLI 可定位。指定会话的目录需与执行客户端的工作区相同 |
 
 Qoder 的既有桥接只返回会话 ID 和运行状态，未提供工作目录与消息历史。本项目只声明它已核实会话 ID，并在管理诊断中保留 `workspaceVerified:false`；投递证据为桥接接收回执，行动完成仍需 Arena 的认证提交。其余四个平台核对宿主会话目录与声明的原模型会话工作区一致；客户端文件所在目录可与会话目录不同。旧本机连接没有声明工作区时保留竞技场目录配置。
 
 Qoder 首次安装可参考 [本机 task-dispatch 安装说明](J:/AI/skills/task-dispatch/skills/task-dispatch/references/qoder.md)。若需安装到用户目录，应由用户明确授权该目录的修改。本次开发未安装或更新外部用户目录、重启真实宿主或向真实会话投递消息。
 
-CodeArts 项目插件使用当前宿主已认证的 SDK，不导出账号密码，不改变模型或权限。如果宿主没有 `session.get/messages/status/promptAsync` 等接口，插件不启动桥接，接入会报告条件未满足。兼容性需以当前 CodeArts 版本实测确认。省略 session 标识时，绑定流程通过桥接的会话列表查询当前工作区会话并仅在唯一匹配时自动绑定；既有 task-dispatch v1 / v2 桥接没有会话列表端点，或查询失败、匹配不唯一时，会明确报错并要求显式传 `--session`，显式指定的行为不变。
+CodeArts 项目插件使用当前宿主已认证的 SDK，不导出账号密码，不改变模型或权限。如果宿主没有 `session.get/messages/status/promptAsync` 等接口，插件不启动桥接，接入会报告条件未满足。兼容性需以当前 CodeArts 版本实测确认。省略 `--session` 时，本机服务或远端 AI 电脑的客户端只读 `~/.codeartsdoer/codearts-data/opencode.db`（含 WAL 最新内容），使用连接命令已有的完整一次性邀请令牌做字面量匹配。正文取自 `part.data`，并结合 `message.data` 的 user 角色核实来源；只接受未归档且 `session.directory` 与原工作区一致的会话。同一会话多条命中会去重，不依赖 `project.worktree`、标题或最近更新时间。唯一命中后仍须通过认证桥接核验该 ID 与工作目录，数据库查找不代替唤醒通道。邀请令牌只用于本次定位，不写入唤醒绑定或转接配置，不输出到日志。
+
+数据库存在但读取失败、无匹配（含消息尚未落库）或多个会话匹配时明确报错并保留邀请，不回退选择其他历史会话；消息落库后可重试，也可显式传 `--session`。数据库不存在时兼容原桥接发现：固定 session 的描述文件可复用，其余桥接仅接受工作区唯一会话；旧桥接缺少列表端点时仍须显式指定。显式 `--session` 始终跳过内容定位并进行宿主核验。邀请模板已说明 CodeArts 应先删除 session 占位参数自动查找，无需先让用户手工查询 ID。
 
 ## 可选配置
 
@@ -60,9 +62,12 @@ CodeArts 项目插件使用当前宿主已认证的 SDK，不导出账号密码�
 | `ARENA_MIMO_DISCOVERY` | MiMo 本机发现文件，默认 `%APPDATA%/Xiaomi MiMo/desktop-api.json` |
 | `ARENA_QODER_DISCOVERY` | Qoder 桥接发现文件；默认查实际配置目录以及 `~/.qoder-cn/`、`~/.qoder/` 中的 `task-dispatch-bridge.json` |
 | `ARENA_CODEARTS_DISCOVERY` | 覆盖 CodeArts 桥接发现文件；默认优先当前项目 `tmp/codearts-bridge/`，再兼容 `~/.codeartsdoer/task-dispatch/` |
+| `ARENA_CODEARTS_DB` | 覆盖 CodeArts 会话定位数据库，默认 `~/.codeartsdoer/codearts-data/opencode.db`；仅只读定位，不用于直接投递 |
 | `ARENA_OPENCODE_DB` | OpenCode 数据库，默认 `~/.local/share/opencode/opencode.db`；有 `XDG_DATA_HOME` 时沿用该数据根目录 |
 | `ARENA_OPENCODE_CLI` | 官方 CLI 可执行文件。默认按数字版本查 Desktop 安装目录，随后检查 PATH；Windows 不用批处理包装或 shell 拼接 |
 | `ARENA_OPENCODE_AUTO` | 仅显式设置为 `1` 时给 CLI 增加 `--auto`。默认不添加，保留原会话权限 |
+
+OpenCode CLI 发现支持桌面版纯版本目录及当前架构后缀目录（如 `2.0.29-x64`），按数字版本从新到旧查找；同版本优先当前架构目录，无需创建硬链接。
 
 OpenCode 使用 `run --session <真实ID> --format json` 投递到原会话，沿用原模型；只有接入端显式指定 `--model` 时才传模型参数。不使用 `--fork` 或 `--standalone`。命令接口与 JSON 输出见 [OpenCode 官方 CLI 文档](https://opencode.ai/v2/docs/cli/commands/)。
 
@@ -87,7 +92,7 @@ node "CLIENT_ABSOLUTE_PATH" resume --credential "tmp/red.credential.json"
 node "CLIENT_ABSOLUTE_PATH" status --credential "tmp/red.credential.json"
 ```
 
-正常重启服务后复用持久化绑定与通知标记。每个席位独立处理宿主读写，一端挂起不阻塞其他端。服务停止后停止派发，不强杀宿主会话。异常退出仍沿用原服务锁的人工核实规则。
+正常重启服务后复用持久化绑定与通知标记。每个席位独立处理宿主读写，一端挂起不阻塞其他端。服务停止后停止派发，不强杀宿主会话。Windows 启动先获取与数据目录对应的进程互斥；异常退出遗留的锁在确认旧进程已退出后自动回收，存活或无法确认时保留锁并给出中文原因和 PID。
 
 ## 验证范围
 
@@ -107,6 +112,6 @@ node "CLIENT_ABSOLUTE_PATH" status --credential "tmp/red.credential.json"
 
 发送前持久化 `sending` 并再次校验租约。断线或进程退出后的不确定送达先核验原标记；未确认不会盲目重发。多个转接实例由服务租约排他，本机锁避免常规重复进程；采用剩余有效时长避免两台电脑时钟偏差。管理员手动唤醒远端席位只请求转接再检查，不绕过这些限制。
 
-网络恢复后转接保留原身份重试，期限继续；转接进程重启可用原角色凭据执行 `resume` 或 `status` 自动恢复，也可直接运行 `node tmp/arena-client/relay-client.mjs --credential "tmp/实际名称.relay.credential.json"`。撤销绑定后两类旧凭据均失效，旧转接在收到 401 后退出；比赛收尾通知确认送达后退出。新绑定重新生成凭据，沿用尚未到期的任务期限。
+网络恢复后转接保留原身份重试，期限继续；转接进程重启可用原角色凭据执行 `resume` 或 `status` 自动恢复，也可直接运行 `node tmp/arena-client/relay-client.mjs --credential "tmp/实际名称.relay.credential.json"`。撤销绑定或删除房间后两类旧凭据均失效，旧转接在收到 401 后退出。一局收尾后转接继续待命，房主重开并开始新局时复用连接，完成通知按 `runId` 区分。升级前已经退出的旧转接需在原会话用原凭据执行一次 `resume` 恢复。新绑定重新生成凭据，沿用尚未到期的任务期限。
 
 CodeArts 下载包包含项目插件源文件，但远端工作区仍须已加载兼容的认证 SDK 桥接（可使用已有 task-dispatch 桥接）；Qoder 须已加载 App Plugin，并由桥接提供工作目录证明，缺失时拒绝远端接入且保留邀请。本机 Qoder 的既有兼容行为保留。下载文件不会自动安装或重启桌面宿主。条件不足时客户端明确报错，邀请保留。完整步骤见 [局域网说明](LAN.md)。

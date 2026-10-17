@@ -14,6 +14,29 @@ import {temporaryDirectory, removeTemporaryDirectory} from '../lib/temp.mjs';
 const workspace = path.resolve('.'), cli = promisify(execFile);
 const invitationToken = invitation => invitation.text.match(/--invitation ([a-f0-9]+)/)[1];
 
+test('OpenCode CLI uses only its selected host environment, preserves explicit sessions and verifies before connecting', async t => {
+ const root = temporaryDirectory('arena-opencode-env-'), adapter = host();
+ const app = await serve({port: 0, root, autoTick: false, wakeOptions: {adapters: {opencode: adapter}}});
+ t.after(async () => { await app.close(); removeTemporaryDirectory(root); });
+ const id = app.arena.create({kind: 'xiangqi'}).id;
+ const env = {...process.env, OPENCODE_SESSION_ID: 'ses_host_environment_fixture', CODEX_THREAD_ID: 'wrong-codex-session'};
+ for (const [seat, extra, expected] of [['red', [], env.OPENCODE_SESSION_ID], ['black', ['--session', 'ses_explicit_fixture'], 'ses_explicit_fixture']]) {
+  const invitation = app.arena.invite(id, seat, app.origin);
+  assert.ok(invitation.text.includes('OPENCODE_SESSION_ID'));
+  const out = await cli(process.execPath, ['client.mjs', 'connect', '--url', app.origin, '--match', id, '--seat', seat, '--invitation', invitationToken(invitation), '--provider', 'opencode', '--out', path.join(root, seat + '.credential.json'), ...extra], {env});
+  assert.equal(JSON.parse(out.stdout).connected, true);
+  assert.equal(app.arena.get(id).bindings[seat].session, expected);
+  assert.ok(!out.stdout.includes(expected), 'session ID must not appear in CLI output');
+ }
+ const other = app.arena.create({kind: 'xiangqi'}).id, invitation = app.arena.invite(other, 'red', app.origin), credential = path.join(root, 'missing.credential.json');
+ const args = ['client.mjs', 'connect', '--url', app.origin, '--match', other, '--seat', 'red', '--invitation', invitationToken(invitation), '--out', credential];
+ await assert.rejects(cli(process.execPath, [...args, '--provider', 'opencode'], {env: {...env, OPENCODE_SESSION_ID: ''}}), /OPENCODE_SESSION_ID/);
+ await assert.rejects(cli(process.execPath, [...args, '--provider', 'mimo'], {env}), /confirm real provider and session/);
+ await assert.rejects(cli(process.execPath, [...args, '--provider', 'opencode', '--workspace', path.join(root, 'wrong')], {env}), /workspace/);
+ assert.ok(app.arena.get(other).invites.red);
+ assert.ok(!fs.existsSync(credential));
+});
+
 function host() {
  const messages = new Map(), calls = [], states = new Map();
  return {messages, calls, states,

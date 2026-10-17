@@ -134,3 +134,26 @@ test('CLI transport launches a literal executable without a shell or visible con
  const keepAlive = setInterval(() => {}, 1000);
  try { assert.equal((await done).code, 0); } finally { clearInterval(keepAlive); }
 });
+
+test('Desktop CLI discovery supports native architecture suffixes without links and skips unusable candidates', t => {
+ const root = temporaryDirectory('opencode-cli-arch-');
+ t.after(() => removeTemporaryDirectory(root));
+ const name = process.platform === 'win32' ? 'opencode-cli.exe' : 'opencode-cli';
+ const cliRoot = path.join(root, 'ai.opencode.desktop', 'cli');
+ const otherArch = process.arch === 'arm64' ? 'x64' : 'arm64';
+ const add = (version, file = true) => {
+  const dir = path.join(cliRoot, version);
+  fs.mkdirSync(dir, {recursive: true});
+  if (file) fs.writeFileSync(path.join(dir, name), '', 'utf8');
+  return path.join(dir, name);
+ };
+ const old = add('2.0.9'), native = add('2.0.29-' + process.arch);
+ add('2.0.29'); add('9.0.0-' + otherArch); add('9.0.1-backup'); add('10.0.0', false);
+ const directory = add('11.0.0', false); fs.mkdirSync(directory);
+ const env = {APPDATA: root, PATH: ''};
+ assert.equal(findOpenCodeCli(env), native, 'native suffix wins ties and other architectures are ignored');
+ fs.unlinkSync(native);
+ assert.equal(findOpenCodeCli(env), path.join(cliRoot, '2.0.29', name));
+ fs.unlinkSync(path.join(cliRoot, '2.0.29', name));
+ assert.equal(findOpenCodeCli(env), old, 'missing binaries and directories fall back to the next usable version');
+});

@@ -54,7 +54,7 @@ test('Remote notification does not claim actions; completion wakes once and game
  const identity=f.arena.identity(red.token),job=f.arena.claim(identity).job;
  assert.equal(f.arena.submit(identity,{...job,result:{from:[0,6],to:[0,5]}}).ok,true);
  f.arena.park(identity);f.arena.resign(black);await w.instance.step();await w.instance.step();
- assert.equal(w.calls.length,2);assert.equal(w.instance.stopped,true);
+ assert.equal(w.calls.length,2);assert.equal(w.instance.stopped,false);assert.equal((await w.instance.step()).completed,true);
  assert.ok(!JSON.stringify(f.arena.public(f.arena.get(id))).includes(red.relayToken));
  assert.throws(()=>f.arena.identity(red.relayToken),/Unauthorized/);
  assert.throws(()=>f.relay.identity(red.token),/Unauthorized/);

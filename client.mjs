@@ -24,12 +24,13 @@ try{
   if(fs.existsSync(credentialPath))throw Error('Credential file exists; use it rather than overwrite');
   const base=arenaUrl(opts.url);if(base.pathname!=='/')throw Error('Use the Arena HTTP origin');
   const provider=providerName(opts.provider);
-  let session=opts.session||(provider==='codex'?process.env.CODEX_THREAD_ID:undefined);
+  let session=opts.session||(provider==='codex'?process.env.CODEX_THREAD_ID:provider==='opencode'?process.env.OPENCODE_SESSION_ID:undefined);
+  if(provider==='opencode'&&!session)throw Error('OpenCode 未提供当前会话 ID：请在原会话读取 OPENCODE_SESSION_ID，或用 --session 显式传入真实 ses_ ID');
   const transport=opts['wake-transport']||'local';
   if(!['local','relay'].includes(transport))throw Error('Invalid wake transport');
   const workspace=path.resolve(opts.workspace||process.cwd());
   let config=null;
-  if(transport==='relay'&&supportsWake(provider))config=await prepareHost(hostInput(provider,session,credentialPath),{workspace,adapters:createWakeAdapters(),requireWorkspace:true});
+  if(transport==='relay'&&supportsWake(provider))config=await prepareHost({...hostInput(provider,session,credentialPath),invitation:opts.invitation},{workspace,adapters:createWakeAdapters(),requireWorkspace:true});
   if(config)session=config.session;
   const relayVerification=config?{verified:true,workspaceVerified:config.workspaceVerified,deviceId:createHash('sha256').update(os.hostname()+'\0'+os.userInfo().username+'\0'+os.homedir()).digest('hex')}:undefined;
   const out=await postArena(base.origin+'/api/connect',{match:opts.match,seat:opts.seat,invitation:opts.invitation,...hostInput(provider,session,credentialPath),workspace,wakeTransport:transport,...(relayVerification?{relayVerification}:{})});
@@ -45,7 +46,7 @@ try{
   // Explicit allowlist: never print either token, local bridge config, or session ID.
   console.log(JSON.stringify({connected:true,seat:out.seat,credential:credentialPath,continuationMode:out.continuationMode,nextAction:out.nextAction,parked:out.parked,idle:out.idle,completed:out.completed,...(out.job?{job:out.job}:{})},null,2));
  }else{
-  if(!['claim','resume','submit','status','park','wake-bind','emote','undo-request','resign'].includes(command))throw Error('Commands: connect, claim, resume, submit, status, park, wake-bind, emote, undo-request, resign. See README.');
+  if(!['claim','resume','submit','status','park','wake-bind','emote','undo-request','resign','profile','history','chat-restart'].includes(command))throw Error('Commands: connect, claim, resume, submit, status, park, wake-bind, emote, undo-request, resign, profile, history, chat-restart. See README.');
   const credentialPath=path.resolve(opts.credential),credential=JSON.parse(fs.readFileSync(credentialPath,'utf8'));
   if(credential.relayCredentialPath){
    if(command==='wake-bind'){
@@ -59,7 +60,10 @@ try{
   }
   const body={action:command,credentialPath,...(opts.workspace||credential.workspace?{workspace:path.resolve(opts.workspace||credential.workspace)}:{}),...(opts.provider?{provider:opts.provider}:{}),...(opts.model?{model:opts.model}:{}),...(opts['turn-id']?{turnId:opts['turn-id']}: {})};
   if(command==='submit')Object.assign(body,{taskId:opts.task,attemptId:opts.attempt,result:JSON.parse(fs.readFileSync(opts.file,'utf8'))});
-  if(command==='emote'){if(!opts.emote)throw Error('--emote fixed id required');body.emote=opts.emote}
+  if(command==='emote'){if(!opts.emote)throw Error('--emote fixed id required');body.emote=opts.emote;if(opts.target)body.targetSeat=opts.target}
+  if(command==='profile'&&opts.file)body.profile=JSON.parse(fs.readFileSync(opts.file,'utf8'));
+  if(command==='history')for(const key of ['before','limit'])if(opts[key]!==undefined){if(!/^\d+$/.test(opts[key]))throw Error('--'+key+' must be an integer');body[key]=Number(opts[key])}
+  if(command==='history'&&opts.run)body.runId=opts.run;
   if(command==='undo-request'){if(!/^\d+$/.test(opts.revision||''))throw Error('--revision boardRevision required');body.boardRevision=Number(opts.revision)}
   let out;const until=Date.now()+60000;
   do{
