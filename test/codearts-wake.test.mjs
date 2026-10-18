@@ -5,6 +5,7 @@ import path from 'node:path';
 import {DatabaseSync} from 'node:sqlite';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
+import {createHash} from 'node:crypto';
 import {CodeArtsWake} from '../lib/wake/codearts.mjs';
 import {prepareHost} from '../lib/wake/host.mjs';
 import {ArenaCodeArts} from '../.opencode/plugins/arena-codearts.js';
@@ -72,6 +73,52 @@ test('CodeArts retains bridge discovery when the database is absent and never cr
  const adapter = new CodeArtsWake({dbPath: absent, credentialFile: file, fetchImpl: () => { throw Error('Pinned bridge does not need HTTP discovery'); }});
  assert.equal(await adapter.resolveSession(f.binding), 'ses_pinned');
  assert.ok(!fs.existsSync(absent));
+});
+
+function restartedBridge(t, {failure, genericDirectory, explicit = false} = {}) {
+ const f = fixture(t), root = path.join(f.root, 'tmp', 'codearts-bridge'), session = 'ses_restarted';
+ fs.mkdirSync(root, {recursive: true});
+ const pinned = path.join(root, createHash('sha256').update(session).digest('hex') + '.json');
+ const old = {version: 2, sessionId: session, directory: f.root, url: 'http://127.0.0.1:5007', token: 'ab'.repeat(32)};
+ const current = {version: 2, directory: genericDirectory || f.root, url: 'http://127.0.0.1:5008', token: 'cd'.repeat(32)};
+ fs.writeFileSync(pinned, JSON.stringify(old), 'utf8');
+ fs.writeFileSync(path.join(root, 'bridge.json'), JSON.stringify(current), 'utf8');
+ const calls = [];
+ const adapter = new CodeArtsWake({discoveryDir: path.join(f.root, 'absent'), env: {}, ...(explicit ? {credentialFile: pinned} : {}), fetchImpl: async (url, options) => {
+  calls.push({url, method: options.method || 'GET'});
+  if (url.startsWith(old.url)) throw failure || new TypeError('fetch failed', {cause: Object.assign(Error('refused'), {code: 'ECONNREFUSED'})});
+  assert.equal(options.headers.Authorization, 'Bearer ' + current.token);
+  return {ok: true, status: 204, json: async () => url.endsWith('/messages') ? [] : url.endsWith('/status') ? {} : {id: session, directory: f.root}};
+ }});
+ return {adapter, calls, binding: {session, workspace: f.root}, old, current};
+}
+
+test('CodeArts resumes a restored session through the refreshed bridge after the pinned port closes', async t => {
+ const f = restartedBridge(t);
+ const info = await f.adapter.read(f.binding);
+ assert.equal(info.session, f.binding.session);
+ assert.equal(info.workspace, f.binding.workspace);
+ assert.equal(info.status, 'idle');
+ assert.equal(f.calls.filter(call => call.url.startsWith(f.current.url)).length, 3);
+ const result = await f.adapter.request(f.binding, '/session/' + f.binding.session + '/prompt_async', {method: 'POST', body: '{}'});
+ assert.equal(result.status, 204);
+ assert.equal(f.calls.filter(call => call.method === 'POST' && call.url.startsWith(f.current.url)).length, 1);
+});
+
+test('CodeArts never retries ambiguous prompt delivery or silently replaces an explicit bridge', async t => {
+ const failure = new TypeError('fetch failed', {cause: Object.assign(Error('reset'), {code: 'ECONNRESET'})});
+ const f = restartedBridge(t, {failure});
+ await assert.rejects(f.adapter.request(f.binding, '/session/' + f.binding.session + '/prompt_async', {method: 'POST', body: '{}'}), error => error === failure);
+ assert.equal(f.calls.length, 1);
+ const pinned = restartedBridge(t, {explicit: true});
+ await assert.rejects(pinned.adapter.read(pinned.binding), /fetch failed/);
+ assert.equal(pinned.calls.length, 1);
+});
+
+test('CodeArts refuses a replacement bridge for another workspace', async t => {
+ const f = restartedBridge(t, {genericDirectory: path.resolve('tmp', 'other-codearts-workspace')});
+ await assert.rejects(f.adapter.read(f.binding), /Invalid CodeArts bridge descriptor/);
+ assert.equal(f.calls.length, 1);
 });
 
 for (const transport of ['local', 'relay']) test(`CodeArts ${transport} CLI connects without --session using invitation content and still verifies the host`, async t => {

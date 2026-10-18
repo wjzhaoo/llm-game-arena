@@ -9,7 +9,7 @@
  function speechOf(e){
   if(!e||e.type!=='action')return null;
   if(typeof e.seat==='string'&&typeof e.speech==='string'&&e.speech)return {seat:e.seat,text:e.speech};
-  const m=/^(p\d)：([\s\S]*)$/.exec(String(e.text||''));
+  const m=/^(p\d)：([\s\S]*)$/.exec(String(e.rawText??e.text??''));
   return m?{seat:m[1],text:m[2]}:null;
  }
  function seatPosition(index,total=6){

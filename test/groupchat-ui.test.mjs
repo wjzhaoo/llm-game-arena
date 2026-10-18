@@ -13,6 +13,23 @@ test('Groupchat public stage escapes content, shows closed ballots and never ren
  html=u.stage(groupchatView(g),{started:true,messages:g.messages});assert.ok(html.includes('&lt;img'));assert.ok(!html.includes('<img onerror'));assert.ok(html.includes('嘲讽 → 乙'));
  g.status='finished';assert.ok(u.stage(groupchatView(g)).includes('聊天已结束'));assert.ok(!u.stage(groupchatView(g)).includes('平局'));
 });
+
+test('waiting members update after each bid and messages use the same neutral avatar',()=>{
+ const u=ui(),g=game();
+ assert.ok(u.stage(groupchatView(g),{started:true}).includes('等待 甲、乙 提交意愿'));
+ applyGroupchat(g,'p1',{type:'bid',score:90},{now:100,timeoutMs:10000});
+ const snapshot=groupchatView(g,null,{snapshot:true});
+ assert.deepEqual(snapshot.pendingSeats,['p2']);
+ const html=u.stage(groupchatView(g),{started:true});
+ assert.ok(html.includes('等待 乙 提交意愿'));assert.ok(!html.includes('等待 甲、乙'));
+ assert.ok(u.actions(groupchatView(g,'p1'),null,{emotes:CHAT_EMOTES,emoteAvailableAt:0},{started:true}).includes('意愿已提交 · 等待 乙 提交意愿'));
+ applyGroupchat(g,'p2',{type:'bid',score:0},{now:100,timeoutMs:10000});
+ assert.ok(u.stage(groupchatView(g),{started:true}).includes('等待 甲 发言'));
+ assert.deepEqual(snapshot.pendingSeats,['p2'],'history keeps its own pending members');
+ const message={type:'speak',text:'你好',at:'2026-10-18T00:00:00Z',sender:{seat:'p1',nickname:'甲',type:'human'}};
+ const human=u.message(message,{}),ai=u.message({...message,sender:{...message.sender,type:'ai',provider:'opencode'}},{});
+ assert.equal(human,ai);assert.ok(!human.includes('真人'));assert.ok(!ai.includes('opencode'));
+});
 test('Groupchat human forms distinguish bids, speeches, emotes and read-only phases',()=>{
  const u=ui(),g=game(),interactions={emotes:CHAT_EMOTES,emoteAvailableAt:0};
  let html=u.actions(groupchatView(g,'p1'),{kind:'chat-bid'},interactions,{started:true,now:100});assert.ok(html.includes('id="chatScore"'));assert.ok(html.includes('本轮弃权'));assert.ok(html.includes('我的私有设定'));assert.equal((html.match(/data-emote=/g)||[]).length,9);
@@ -36,4 +53,10 @@ test('Groupchat controller replay uses historical membership and exposes no live
  const current=groupchatView(g),room={id:'chat',kind:'groupchat',title:'回放',started:true,paused:false,game:current,participants:current.members,events:[],history:[{game:past,started:true,paused:false,text:'早期'}],connections:[],admin:{tasks:[]}};
  ctx.fixtureRoom=room;vm.runInContext("match=fixtureRoom;current='chat';admin='test-admin';replay=0;render()",ctx);
  assert.ok(!element('players').innerHTML.includes('后来加入的人'));assert.ok(!element('players').innerHTML.includes('data-profile-seat'));assert.ok(element('players').innerHTML.includes('只读回放'));assert.equal(element('count').textContent,'2 位成员');assert.equal(element('chatAdminTools').hidden,true);
+ applyGroupchat(g,'p1',{type:'bid',score:99},{now:100,timeoutMs:10000});room.game=groupchatView(g);
+ vm.runInContext('replay=null;render()',ctx);
+ assert.ok(element('players').innerHTML.includes('甲</strong><small>已提交意愿</small>'));
+ assert.ok(element('players').innerHTML.includes('乙</strong><span class="seat-turn-tag">等待提交意愿</span>'));
+ assert.ok(!element('players').innerHTML.includes('后来加入的人</strong><span class="seat-turn-tag">等待提交意愿'));
+ assert.ok(!element('board').innerHTML.includes('99'),'unsettled scores remain hidden');
 });

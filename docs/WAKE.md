@@ -69,11 +69,17 @@ CodeArts 项目插件使用当前宿主已认证的 SDK，不导出账号密码�
 
 OpenCode CLI 发现支持桌面版纯版本目录及当前架构后缀目录（如 `2.0.29-x64`），按数字版本从新到旧查找；同版本优先当前架构目录，无需创建硬链接。
 
+自动发现的 CLI 路径每次投递时重新查找。Desktop 更新并重启可能删除旧版本目录，现有绑定会沿用原 session 和凭据并改用当前安装的 CLI。显式传入的 CLI 路径及 `ARENA_OPENCODE_CLI` 仍由操作者维护；缺失时不擅自替换。不确定送达的通知仍不重发。
+
 OpenCode 使用 `run --session <真实ID> --format json` 投递到原会话，沿用原模型；只有接入端显式指定 `--model` 时才传模型参数。不使用 `--fork` 或 `--standalone`。命令接口与 JSON 输出见 [OpenCode 官方 CLI 文档](https://opencode.ai/v2/docs/cli/commands/)。
 
 OpenCode 只读查询 `session_v2` 与 `session_message`，并检查当前最后一条事件和待处理队列。旧 `time_idle` 不能证明当前回合已结束。投递后回读与本次 attempt 对应的唯一用户消息标记；CLI 的退出码、stdout 或助手复述不能单独证明送达。CLI 仍在等待生成时，消息标记已入库即可登记送达；模型行动只有通过 `submit` 才结算。SQLite 使用 Node 内置接口，无第三方依赖；Node 22.13 起无需实验启动开关，参见 [Node 官方说明](https://nodejs.org/download/release/v22.23.0/docs/api/sqlite.html)。
 
 ## 恢复与排障
+
+若在通知投递期间重启竞技场，未完成的 `sending` 会按“送达不确定”处理。重新核验只查询同一条用户消息标记，不会自动重复发送；原会话可用原凭据执行一次 `resume` 直接领取仍有效的任务。此状态可能跨服务重启保留，重启服务不会清除它。
+
+OpenCode CLI 的结构化错误或标准错误摘要会出现在连接诊断中；输出有长度限制并过滤常见凭据信息，不保存正常助手回复或工具输出。退出码仍不能单独证明送达，只有对应用户消息标记才能确认。
 
 Codex Desktop 返回 `Codex Desktop call was not confirmed (-32602): Invalid app tool request` 时，说明工具请求格式被宿主拒绝。当前适配器显式传递 `callerSource:"codex"` 与本机 `hostId:"local"`，读取回合数遵守工具声明的最多 10 个回合。旧版适配器缺少来源字段且请求 20 个回合；更新后需重启竞技场服务使本机适配器生效，再在原模型会话重试仍有效的邀请。宿主核验失败发生在消耗邀请之前，也不会生成客户端凭据；邀请自身的 30 分钟有效期仍会继续。不要将协议失败降级为已核验或 wait。
 

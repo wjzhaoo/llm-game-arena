@@ -110,7 +110,7 @@ test('Werewolf export keeps night actions and findings private, while retaining 
  for (const seat of a.pending(a.get(id)).slice()) submit(a,c(seat),{type:'speak',text:'公开发言 '+seat+'\n保留第二行'});
  for (const seat of a.pending(a.get(id)).slice()) submit(a,c(seat),{type:'vote',target:'p1'});
  let out = a.exportRecords(id).content;
- assert.ok(out.includes('公开发言 p2\n> 保留第二行'));assert.ok(out.includes('公开票型：'));assert.ok(out.includes('p2→p1'));
+ assert.ok(out.includes('公开发言 p2\n> 保留第二行'));assert.ok(out.includes('公开票型：'));assert.ok(out.includes('模型p2（2 号）→模型p1（1 号）'));
  assert.ok(!out.includes('| 狼人 |'));assert.ok(!out.includes('PRIVATE-FINDING'));assert.ok(!out.includes('PRIVATE-NIGHT'));
  a.end(id);out=a.exportRecords(id).content;assert.ok(out.includes('| 狼人 |'));assert.ok(out.includes('| 预言家 |'));
  for (const secret of ['PRIVATE-FINDING','PRIVATE-NIGHT','findings','potions','wolfVotes','tokenHash']) assert.ok(!out.includes(secret));

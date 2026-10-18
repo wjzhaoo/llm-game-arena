@@ -126,6 +126,27 @@ test('Desktop CLI discovery sorts 2.0.24 after 2.0.9, with explicit overrides ta
  assert.equal(findOpenCodeCli({...env, ARENA_OPENCODE_CLI: process.execPath}), process.execPath);
 });
 
+test('Desktop update/restart rediscovers the CLI after the verified version is removed', async t => {
+ const f=fixture(t),name=process.platform==='win32'?'opencode-cli.exe':'opencode-cli';
+ const install=version=>{
+  const file=path.join(f.root,'ai.opencode.desktop','cli',version,name);
+  fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file,'','utf8');return file;
+ };
+ const old=install('2.0.29-'+process.arch);
+ f.adapter.cliPath=undefined;f.adapter.env={APPDATA:f.root,PATH:''};
+ await f.adapter.verify(f.binding);
+ fs.unlinkSync(old);
+ const current=install('2.0.32-'+process.arch);
+ let calls=0;
+ f.adapter.runCli=(file,args)=>{
+  calls++;assert.equal(file,current);assert.equal(args[2],f.session);
+  f.add('user',{text:args.at(-1)});return {done:Promise.resolve({code:0})};
+ };
+ assert.equal((await f.adapter.send(f.binding,'[restart-marker] 领取任务','restart-marker')).delivered,true);
+ assert.equal(calls,1);
+ assert.equal(f.adapter.cliPath,undefined,'auto-discovered paths must not persist across desktop restarts');
+});
+
 test('CLI transport launches a literal executable without a shell or visible console', async t => {
  const root = temporaryDirectory('opencode-cli-transport-');
  t.after(() => removeTemporaryDirectory(root));
@@ -133,6 +154,24 @@ test('CLI transport launches a literal executable without a shell or visible con
  // Keep the test alive while the deliberately unref'ed client finishes.
  const keepAlive = setInterval(() => {}, 1000);
  try { assert.equal((await done).code, 0); } finally { clearInterval(keepAlive); }
+});
+
+test('CLI transport captures bounded errors without retaining transcript or credentials', async t => {
+ const root=temporaryDirectory('opencode-cli-errors-');t.after(()=>removeTemporaryDirectory(root));
+ const secret='a'.repeat(64),source=`console.log(JSON.stringify({type:'text',part:{text:'PRIVATE-ASSISTANT-TEXT'}}));console.log(JSON.stringify({type:'error',error:{message:'启动失败 token=sample-secret ${secret}'}}));process.exitCode=1;`;
+ const {done}=runOpenCodeCli(process.execPath,['-e',source],{cwd:root});
+ const keepAlive=setInterval(()=>{},1000);
+ try{
+  const outcome=await done;assert.equal(outcome.code,1);assert.ok(outcome.errorMessage.includes('启动失败'));
+  for(const hidden of ['PRIVATE-ASSISTANT-TEXT',secret,'sample-secret'])assert.ok(!JSON.stringify(outcome).includes(hidden));
+ }finally{clearInterval(keepAlive)}
+});
+
+test('CLI exit errors remain uncertain while preserving the actionable diagnostic', async t => {
+ const f=fixture(t);f.adapter.runCli=()=>({done:Promise.resolve({code:1,errorMessage:'Session environment rejected'})});
+ await assert.rejects(f.adapter.send(f.binding,'[error-marker] 唤醒','error-marker'),error=>{
+  assert.notEqual(error.safeToRetry,true);assert.ok(error.wakeHint.includes('Session environment rejected'));return true;
+ });
 });
 
 test('Desktop CLI discovery supports native architecture suffixes without links and skips unusable candidates', t => {

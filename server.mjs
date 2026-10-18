@@ -112,7 +112,7 @@ export async function serve({port=Number(process.env.PORT||4318),host=process.en
     if(v.action==='profile')return reply(200,arena.profile(identity,v));
     if(v.action==='history')return reply(200,arena.messages(identity.match,{runId:v.runId,before:v.before,limit:v.limit??50}));
     if(v.action==='chat-restart')return reply(200,arena.restartChat(identity.match,identity));
-    if(v.action==='status')return reply(200,{...arena.public(arena.get(identity.match)),privateView:arena.view(arena.get(identity.match),identity.seat),interactions:arena.interactions(arena.get(identity.match),identity.seat),connection:wake.diagnostics(identity.match).find(c=>c.seat===identity.seat)});
+    if(v.action==='status')return reply(200,{...arena.modelStatus(identity),connection:wake.diagnostics(identity.match).find(c=>c.seat===identity.seat)});
     throw Error('Unknown desktop action');
    }
    admin();
