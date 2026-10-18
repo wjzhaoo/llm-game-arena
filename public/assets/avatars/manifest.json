@@ -249,6 +249,17 @@
       "trademarkNote": "Used to identify the connected provider. No affiliation or endorsement is implied.",
       "changes": "Copied the installed Windows app package 256 px PNG icon unchanged.",
       "sha256": "b45359d98553406d60c45e699cbe80de6fe733d51661a317ca37b41632b58823"
+    },
+    "dsh": {
+      "label": "DSH / DeepSeek Harness",
+      "src": "/assets/avatars/dsh.svg",
+      "asset": "assets/avatars/dsh.svg",
+      "kind": "original-generic-icon",
+      "initials": "DH",
+      "source": null,
+      "license": "Original vector artwork drawn for this project; generic terminal symbol, no official provider logo used.",
+      "trademarkNote": "Provider names belong to their respective publishers. No affiliation or endorsement is implied.",
+      "sha256": "a9a75e335da537788822a71948e127b5cfcdc1a20ab44e44f879046a0b6fa904"
     }
   },
   "aliases": {

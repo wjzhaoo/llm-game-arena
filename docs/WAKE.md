@@ -1,6 +1,6 @@
 # 原会话唤醒
 
-支持 `codex`、`mimo`、`qoder` / `qodercn`、`codearts` / `codeartsdoer`、`opencode`。选手可使用这些平台，独立裁判角色已移除。其他明确平台继续使用 wait；`auto` 不允许。
+支持 `codex`、`mimo`、`qoder` / `qodercn`、`codearts` / `codeartsdoer`、`opencode`、`dsh`（DeepSeek Harness）。选手可使用这些平台，独立裁判角色已移除。其他明确平台继续使用 wait；`auto` 不允许。
 
 ## 接入与比赛
 
@@ -43,8 +43,9 @@ node "CLIENT_ABSOLUTE_PATH" resume --credential "tmp/邀请ID-red.credential.jso
 | Qoder / QoderCN | 真实 session ID；task-dispatch 常驻 App Plugin | 已安装并加载 task-dispatch 的直接唤醒桥接。普通版与 CN 版分别查询，只有唯一匹配的原会话可使用。通过桥接的 `chat.continueSession` 续接 |
 | CodeArts | 真实 session ID；项目内认证 SDK 桥接 | 原模型会话工作区须已加载兼容的项目认证桥接。项目自带 `.opencode/plugins/arena-codearts.js`，远端下载也包含此插件源文件；发现文件写在原工作区 `tmp/codearts-bridge/`，也兼容已有 task-dispatch 的 v1 / v2 桥接。可省略 session 标识：优先只读本机 SQLite，按本次邀请的用户消息正文精确定位并核对工作目录，支持多个历史会话；无数据库时兼容桥接唯一会话发现 |
 | OpenCode Desktop 2.x | 真实 `ses_...` ID；显式选择 opencode 后可省略 `--session`，客户端读取宿主的 `OPENCODE_SESSION_ID`；只读 SQLite 与官方 CLI | Node 22.13+，现有未归档会话，官方 CLI 可定位。指定会话的目录需与执行客户端的工作区相同 |
+| DSH / DeepSeek Harness Desktop | 真实 session ID；本机签名 Cookie 与 Remote API | DSH Desktop 在宿主电脑运行。可省略 `--session`，按本次邀请在用户回合摘要中的精确命中定位并核对工作区；摘要缺失、截断或多个会话命中时显式指定。沿用原模型，不传 `--model`，不需要 turn ID |
 
-Qoder 的既有桥接只返回会话 ID 和运行状态，未提供工作目录与消息历史。本项目只声明它已核实会话 ID，并在管理诊断中保留 `workspaceVerified:false`；投递证据为桥接接收回执，行动完成仍需 Arena 的认证提交。其余四个平台核对宿主会话目录与声明的原模型会话工作区一致；客户端文件所在目录可与会话目录不同。旧本机连接没有声明工作区时保留竞技场目录配置。
+Qoder 的既有桥接只返回会话 ID 和运行状态，未提供工作目录与消息历史。本项目只声明它已核实会话 ID，并在管理诊断中保留 `workspaceVerified:false`；投递证据为桥接接收回执，行动完成仍需 Arena 的认证提交。其余五个平台核对宿主会话目录与声明的原模型会话工作区一致；客户端文件所在目录可与会话目录不同。旧本机连接没有声明工作区时保留竞技场目录配置。
 
 Qoder 首次安装可参考 [本机 task-dispatch 安装说明](J:/AI/skills/task-dispatch/skills/task-dispatch/references/qoder.md)。若需安装到用户目录，应由用户明确授权该目录的修改。本次开发未安装或更新外部用户目录、重启真实宿主或向真实会话投递消息。
 
@@ -59,6 +60,8 @@ CodeArts 项目插件使用当前宿主已认证的 SDK，不导出账号密码�
 | 环境变量 | 用途与默认值 |
 | --- | --- |
 | `CODEX_HOME` | Codex rollout 根目录，默认用户目录下 `.codex/` |
+| `DSH_WEB_URL` | DSH Desktop 当前回环 HTTP/HTTPS origin；Windows 未配置时从 DeepSeek Harness 宿主进程的回环监听端口发现，多个候选时必须显式指定，每次操作重新发现 |
+| `DSH_HOME` | DSH 数据目录，默认 `~/.dsh`；只读 `.credentials.yaml` 中的 `client-connection/browser-session` 密钥，生成 5 分钟签名 Cookie，不持久化到竞技场 |
 | `ARENA_MIMO_DISCOVERY` | MiMo 本机发现文件，默认 `%APPDATA%/Xiaomi MiMo/desktop-api.json` |
 | `ARENA_QODER_DISCOVERY` | Qoder 桥接发现文件；默认查实际配置目录以及 `~/.qoder-cn/`、`~/.qoder/` 中的 `task-dispatch-bridge.json` |
 | `ARENA_CODEARTS_DISCOVERY` | 覆盖 CodeArts 桥接发现文件；默认优先当前项目 `tmp/codearts-bridge/`，再兼容 `~/.codeartsdoer/task-dispatch/` |
@@ -74,6 +77,10 @@ OpenCode CLI 发现支持桌面版纯版本目录及当前架构后缀目录（�
 OpenCode 使用 `run --session <真实ID> --format json` 投递到原会话，沿用原模型；只有接入端显式指定 `--model` 时才传模型参数。不使用 `--fork` 或 `--standalone`。命令接口与 JSON 输出见 [OpenCode 官方 CLI 文档](https://opencode.ai/v2/docs/cli/commands/)。
 
 OpenCode 只读查询 `session_v2` 与 `session_message`，并检查当前最后一条事件和待处理队列。旧 `time_idle` 不能证明当前回合已结束。投递后回读与本次 attempt 对应的唯一用户消息标记；CLI 的退出码、stdout 或助手复述不能单独证明送达。CLI 仍在等待生成时，消息标记已入库即可登记送达；模型行动只有通过 `submit` 才结算。SQLite 使用 Node 内置接口，无第三方依赖；Node 22.13 起无需实验启动开关，参见 [Node 官方说明](https://nodejs.org/download/release/v22.23.0/docs/api/sqlite.html)。
+
+DSH 使用 `session/list` 核验原会话 ID、目录与运行状态，使用 `session/prompt` 的 `mode: queue` 唤醒已有空闲会话。`accepted:true` 记为宿主接收回执，不代表已领取或提交游戏行动。未知、忙碌或不可恢复的会话不会投递；发送失败或超时保留不确定状态，只核验用户回合摘要中的唯一通知标记，不自动重发。签名密钥、Cookie 与宿主端口不写入绑定、邀请或日志；拒绝非回环地址和重定向。
+
+省略 DSH 会话标识时，只匹配当前工作目录中用户回合摘要包含完整一次性邀请令牌的会话，并对同一会话去重；助手回复、标题、最近更新时间和目录本身不能证明身份。定位成功后仍须重新核验会话。显式 `--session` 跳过内容定位。协议参考本地 task-dispatch 的 DSH Desktop `0.2.1-rc.2` 适配，属于宿主内部 Remote API，升级后需重新联调。
 
 ## 恢复与排障
 
@@ -102,9 +109,11 @@ node "CLIENT_ABSOLUTE_PATH" status --credential "tmp/red.credential.json"
 
 ## 验证范围
 
-新增离线测试覆盖五个平台的协议、身份/目录不匹配、授权边界、去重、不确定发送、持久化重启、撤销竞态、超时、私有投影、结束通知以及真实 Node 客户端的本机 HTTP 往返。所有生成的测试与演示文件只写本项目 `tmp/`，使用模拟宿主及 SQLite 夹具，不消耗真实模型额度。
+新增离线测试覆盖六个平台的协议、身份/目录不匹配、授权边界、去重、不确定发送、持久化重启、撤销竞态、超时、私有投影、结束通知以及真实 Node 客户端的本机 HTTP 往返。所有生成的测试与演示文件只写本项目 `tmp/`，使用模拟宿主及 SQLite 夹具，不消耗真实模型额度。
 
-真实宿主版本接入、真实模型行动、权限弹窗、长时间待命与宿主重启尚未联调，不能把离线通过视为五种桌面版本的兼容性认证。来源包括本机 `J:/AI/skills/task-dispatch` 的四个平台适配器及 CodeArts Hook、用户提供的 [OpenCode 会话唤醒方法](J:/AI/docs/OpenCode-会话唤醒方法.md)。文档中的示例会话与示例消息只作技术参考，未执行。
+真实宿主版本接入、真实模型行动、权限弹窗、长时间待命与宿主重启尚未联调，不能把离线通过视为六种桌面版本的兼容性认证。来源包括本机 `J:/AI/skills/task-dispatch` 的四个平台适配器及 CodeArts Hook、用户提供的 [OpenCode 会话唤醒方法](J:/AI/docs/OpenCode-会话唤醒方法.md)。文档中的示例会话与示例消息只作技术参考，未执行。
+
+DSH 离线测试使用隔离签名密钥和模拟 RPC，覆盖端口重发现、分页、邀请定位、会话与目录核验、冷会话排队、忙碌与撤销竞态、不确定投递去重、本机客户端及远端下载转接。未向真实 DSH 会话投递。
 
 ## 管理台手动唤醒
 
