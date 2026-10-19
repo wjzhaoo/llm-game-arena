@@ -1,3 +1,4 @@
+import {submitAction} from './action-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -21,7 +22,7 @@ function players(a,kind){
  const inv=a.roomInvite(id,'http://127.0.0.1:4318'),c=a.joinHuman({match:id,seat:humanSeat,nickname:'真人乙',profile:kind==='groupchat'?{personality:'温和',initialOpinion:'旧观点'}:undefined,invitation:new URL(inv.url).hash.slice(6)});
  connections.push({...c,identity:a.identity(c.token)});a.start(id);return {id,connections};
 }
-function submit(a,identity,result){const {job}=a.claim(identity);assert.ok(job);return a.submit(identity,{...job,result})}
+function submit(a,identity,result){const {job}=a.claim(identity);assert.ok(job);return submitAction(a,identity,{...job,result})}
 
 for(const kind of ['xiangqi','blind','werewolf','groupchat'])for(const state of ['playing','paused','finished'])test(kind+' restarts from '+state+' with durable read-only history and reusable mixed identities',t=>{
  const {a,store}=fixture(t),{id,connections}=players(a,kind),before=a.public(a.get(id)),actor=connections.find(c=>a.pending(a.get(id)).includes(c.seat)),old=actor&&a.claim(actor.identity).job;
@@ -33,7 +34,7 @@ for(const kind of ['xiangqi','blind','werewolf','groupchat'])for(const state of 
  assert.deepEqual(result.match.participants.map(p=>[p.seat,p.type,p.nickname]),before.participants.map(p=>[p.seat,p.type,p.nickname]));
  for(const c of connections)assert.deepEqual(a.identity(c.token),c.identity);
  assert.equal(a.claim(connections[0].identity).job,null);
- if(old)assert.throws(()=>a.submit(actor.identity,{...old,result:{}}),/Stale/);
+ if(old)assert.throws(()=>submitAction(a,actor.identity,{...old,result:{}}),/Stale/);
  const past=a.publicRun(id,firstRun);assert.equal(past.readOnly,true);assert.equal(past.game.status,'finished');assert.equal(past.runs.length,2);assert.ok(past.events.some(e=>e.type==='started'));
  for(const secret of ['tokenHash','credentialPath','session','秘密性格','旧立场'])assert.ok(!JSON.stringify(past).includes(secret),secret);
  if(kind==='groupchat'){
@@ -50,13 +51,13 @@ test('Actual score-only and null-emote failures are accepted without weakening v
  const {a}=fixture(t),id=a.create({kind:'groupchat',topic:'回归测试'}).id;
  const actors=Array.from({length:2},()=>{const {seat}=a.chatMembers(id,{action:'add-ai'});return ai(a,id,seat).identity});a.start(id);
  const first=a.claim(actors[0]).job;
- const bad={type:'bid',score:101};assert.equal(a.submit(actors[0],{...first,result:bad}).remaining,1);assert.equal(a.submit(actors[0],{...first,result:bad}).duplicate,true);
- const valid={score:85};assert.equal(a.submit(actors[0],{...first,result:valid}).ok,true);assert.equal(a.submit(actors[0],{...first,result:valid}).duplicate,true);
+ const bad={type:'bid',score:101};assert.equal(submitAction(a,actors[0],{...first,result:bad}).remaining,1);assert.equal(submitAction(a,actors[0],{...first,result:bad}).duplicate,true);
+ const valid={score:85};assert.equal(submitAction(a,actors[0],{...first,result:valid}).ok,true);assert.equal(submitAction(a,actors[0],{...first,result:valid}).duplicate,true);
  assert.equal(a.get(id).jobs.find(j=>j.taskId===first.taskId).invalid,1);assert.equal(a.adminView(id).tasks[0].status,'resolved');assert.match(a.adminView(id).tasks[0].details,/0\.\.100/);
  submit(a,actors[1],{type:'bid',score:0});const speech=a.claim(actors[0]).job;
- assert.equal(a.submit(actors[0],{...speech,result:{type:'speak',text:'有效发言',emote:null}}).ok,true);assert.equal(a.get(id).game.messages[0].emote,null);
+ assert.equal(submitAction(a,actors[0],{...speech,result:{type:'speak',text:'有效发言',emote:null}}).ok,true);assert.equal(a.get(id).game.messages[0].emote,null);
  assert.equal(a.get(id).adminTasks.length,1);assert.ok(a.claim(actors[0]).job.actionExample);
- for(const action of [{score:'85'},{score:50,extra:true}])assert.equal(a.submit(actors[1],{...a.claim(actors[1]).job,result:action}).ok,false);
+ for(const action of [{score:'85'},{score:50,extra:true}])assert.equal(submitAction(a,actors[1],{...a.claim(actors[1]).job,result:action}).ok,false);
  assert.equal(a.get(id).adminTasks.filter(t=>t.status==='pending').length,0);
 });
 

@@ -1,3 +1,4 @@
+import {submitAction} from './action-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Arena} from '../lib/arena.mjs';
@@ -18,13 +19,13 @@ test('mixed chat hides identity in tasks, selections, historical messages, targe
  const ai=a.identity(a.connect({match:id,seat,provider:'simulated',session:'test-ai',invitation:invitation.text.match(/--invitation ([a-f0-9]+)/)[1]}).token);
  const human=a.identity(a.joinHuman({match:id,nickname:'乙',invitation:new URL(a.roomInvite(id,'http://127.0.0.1:4318').url).hash.slice(6)}).token);
  a.start(id);
- const bid=a.claim(ai).job;assertNeutral(bid.view);assert.deepEqual(bid.view.pendingSeats,[ai.seat,human.seat]);
- a.submit(ai,{...bid,result:{type:'bid',score:0}});
- const hb=a.claim(human).job;a.submit(human,{...hb,result:{type:'bid',score:100}});
+ const bid=a.claim(ai).job;assertNeutral(bid.view);assert.equal(bid.view.pendingSeats,undefined);
+ submitAction(a,ai,{...bid,result:{type:'bid',score:0}});
+ const hb=a.claim(human).job;submitAction(a,human,{...hb,result:{type:'bid',score:100}});
  assertNeutral(a.view(a.get(id),ai.seat));
  const speech=a.claim(human).job;
  const original='human、AI、opencode 是发言正文，保持原样';
- a.submit(human,{...speech,result:{type:'speak',text:original,emote:{id:'agree',targetSeat:ai.seat}}});
+ submitAction(a,human,{...speech,result:{type:'speak',text:original,emote:{id:'agree',targetSeat:ai.seat}}});
  const m=a.get(id);
  assert.equal(m.game.messages[0].sender.type,'human','connection evidence remains internal');
  for(const view of [groupchatView(m.game,ai.seat),groupchatView(m.game,null,{snapshot:true}),chatMessages(m.game),a.messages(id),a.modelStatus(ai)])assertNeutral(view);

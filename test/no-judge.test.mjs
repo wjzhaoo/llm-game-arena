@@ -1,3 +1,4 @@
+import {submitAction} from './action-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -23,7 +24,7 @@ function connectAll(arena,id){
  for(const seat of arena.seats(arena.get(id))){const invitation=arena.invite(id,seat,'http://127.0.0.1:4318');assert.doesNotMatch(invitation.text,/裁判|verdict/);const connection=arena.connect({match:id,seat,invitation:invitationToken(invitation),provider:'simulated',session:'fixture-'+seat});ids[seat]=arena.identity(connection.token)}
  return ids;
 }
-function act(arena,identity,result){const {job}=arena.claim(identity);assert.ok(job);return arena.submit(identity,{...job,result})}
+function act(arena,identity,result){const {job}=arena.claim(identity);assert.ok(job);return submitAction(arena,identity,{...job,result})}
 function noJudge(arena,id){const m=arena.get(id);assert.equal(m.jobs.some(j=>j.seat==='judge'),false);assert.equal(arena.public(m).participants.some(p=>p.seat==='judge'),false)}
 
 test('Two-player Xiangqi completes a full legal threefold game with no judge seat or final job',t=>{
@@ -62,16 +63,16 @@ test('Six-player Werewolf completes two full rounds and deterministic good victo
 test('Invalid replies create bounded admin tasks while rules remain authoritative and retry cannot reset limits',t=>{
  const {arena}=fixture(t),id=arena.create({kind:'xiangqi',timeoutSeconds:10}).id,ids=connectAll(arena,id);arena.start(id);
  const {job}=arena.claim(ids.red),deadline=job.deadline;
- const invalid={from:[0,6],to:[0,3]};assert.equal(arena.submit(ids.red,{...job,result:invalid}).remaining,1);
- assert.equal(arena.submit(ids.red,{...job,result:invalid}).duplicate,true);
+ const invalid={from:[0,6],to:[0,3]};assert.equal(submitAction(arena,ids.red,{...job,result:invalid}).remaining,1);
+ assert.equal(submitAction(arena,ids.red,{...job,result:invalid}).duplicate,true);
  const task=arena.adminView(id).tasks[0];assert.equal(task.canRetry,true);assert.equal(task.kind,'invalid_action');
  const before=structuredClone(arena.get(id).game);
  arena.control(id,{action:'retry',taskId:task.id});
  assert.deepEqual(arena.get(id).game,before);assert.equal(arena.get(id).jobs[0].deadline,deadline);assert.equal(arena.get(id).jobs[0].invalid,1);assert.equal(arena.get(id).jobs[0].priorAttempts[0].attemptId,job.attemptId);
- assert.throws(()=>arena.submit(ids.red,{...job,result:{from:[0,6],to:[0,5]}}),/Stale attempt/);
+ assert.throws(()=>submitAction(arena,ids.red,{...job,result:{from:[0,6],to:[0,5]}}),/Stale attempt/);
  assert.throws(()=>arena.control(id,{action:'retry',taskId:task.id}),/cannot be retried/);
  const next=arena.claim(ids.red).job;assert.notEqual(next.attemptId,job.attemptId);
- assert.equal(arena.submit(ids.red,{...next,result:{from:[0,6],to:[1,6]}}).remaining,0);
+ assert.equal(submitAction(arena,ids.red,{...next,result:{from:[0,6],to:[1,6]}}).remaining,0);
  assert.equal(arena.get(id).game.winner,'black');assert.ok(arena.adminView(id).tasks.every(t=>!t.canRetry));noJudge(arena,id);
 });
 
@@ -81,7 +82,7 @@ test('Pause survives restart, freezes remaining deadlines, prevents mutation, an
  const pausedAt=f.arena.get(id).pausedAt,game=structuredClone(f.arena.get(id).game);
  f.clock.now+=50000;f.arena.pause(id);assert.equal(f.arena.get(id).pausedAt,pausedAt);
  f.restart();f.clock.now+=50000;f.arena.tick();assert.equal(f.arena.get(id).paused,true);assert.deepEqual(f.arena.get(id).game,game);assert.equal(f.arena.claim(ids.red).paused,true);
- assert.throws(()=>f.arena.submit(ids.red,{...job,result:{from:[0,6],to:[0,5]}}),/paused/);
+ assert.throws(()=>submitAction(f.arena,ids.red,{...job,result:{from:[0,6],to:[0,5]}}),/paused/);
  f.arena.control(id,{action:'resume'});assert.equal(f.arena.get(id).jobs[0].deadline-f.clock.now,7000);assert.equal(f.arena.public(f.arena.get(id)).paused,false);
  const resumedDeadline=f.arena.get(id).jobs[0].deadline;f.arena.resume(id);assert.equal(f.arena.get(id).jobs[0].deadline,resumedDeadline);
  f.clock.now+=6999;f.arena.tick();assert.equal(f.arena.get(id).game.status,'playing');
@@ -91,7 +92,7 @@ test('Pause survives restart, freezes remaining deadlines, prevents mutation, an
 test('Pause/retry controls cannot alter hidden roles or inject moves; ending cancels tasks without choosing winner',t=>{
  const {arena,clock}=fixture(t),id=arena.create({kind:'werewolf',timeoutSeconds:10}).id,ids=connectAll(arena,id);arena.start(id);
  const roles=structuredClone(arena.get(id).game.players),wolf=roles.find(p=>p.role==='wolf').id,{job}=arena.claim(ids[wolf]);
- arena.submit(ids[wolf],{...job,result:{type:'kill',target:'no-such-seat'}});const task=arena.adminView(id).tasks[0];
+ submitAction(arena,ids[wolf],{...job,result:{type:'kill',target:'no-such-seat'}});const task=arena.adminView(id).tasks[0];
  for(const input of [{action:'retry',taskId:task.id,result:{type:'kill',target:'p1'}},{action:'pause',game:{}},{action:'end',winner:'wolves'},{action:'set-role',seat:wolf,role:'villager'}])assert.throws(()=>arena.control(id,input),/Only|Invalid/);
  arena.pause(id);clock.now+=100000;arena.retry(id,{taskId:task.id});arena.tick();
  assert.deepEqual(arena.get(id).game.players,roles);assert.equal(arena.get(id).game.phase,'wolf');assert.equal(arena.get(id).paused,true);
@@ -103,7 +104,7 @@ test('Night faults and admin tasks expose no role, actor, action, phase, invitat
  const {arena}=fixture(t),id=arena.create({kind:'werewolf'}).id,ids=connectAll(arena,id);arena.start(id);
  const m=arena.get(id),wolf=m.game.players.find(p=>p.role==='wolf').id,{job}=arena.claim(ids[wolf]);
  const publicBefore=JSON.stringify(arena.public(arena.get(id)));
- arena.submit(ids[wolf],{...job,result:{type:'kill',target:'private-night-target-sentinel'}});
+ submitAction(arena,ids[wolf],{...job,result:{type:'kill',target:'private-night-target-sentinel'}});
  assert.equal(JSON.stringify(arena.public(arena.get(id))),publicBefore);
  const admin=JSON.stringify(arena.adminView(id));
  for(const privateValue of [job.taskId,job.attemptId,job.phase,wolf,'private-night-target-sentinel','targetTask','sourceTask','tokenHash','session','nightVictim'])assert.ok(!admin.includes(privateValue),privateValue);
@@ -118,7 +119,7 @@ test('Legacy judge migration preserves history, converts pending tasks once and 
  f.restart();const m=f.arena.get(id),converted=m.jobs.find(j=>j.taskId==='pending-judge');
  assert.equal(converted.status,'converted');assert.equal(converted.legacyStatus,'open');assert.equal(converted.fault.seat,'red');assert.equal(m.adminTasks.length,1);assert.equal(m.adminTasks[0].id,converted.convertedToAdminTask);
  assert.deepEqual(m.jobs.find(j=>j.taskId==='past-judge'),historical);assert.deepEqual(m.history,history);assert.deepEqual(m.events,events);assert.equal(m.receipts['past-attempt'].digest,'stored');assert.equal(m.bindings.judge.tokenHash,digest(token));assert.equal(m.bindings.judge.armed,false);assert.ok(m.bindings.judge.revokedAt);assert.ok(m.invites.judge.revokedAt);
- assert.throws(()=>f.arena.identity(token),/Unauthorized/);assert.throws(()=>f.arena.claim(oldIdentity),/revoked/);assert.throws(()=>f.arena.park(oldIdentity),/revoked/);assert.throws(()=>f.arena.submit(oldIdentity,{taskId:'pending-judge',attemptId:'pending-attempt',result:{verdict:'acknowledge'}}),/revoked/);assert.throws(()=>f.arena.connect({match:id,seat:'judge',invitation,provider:'simulated',session:'old'}),/Invalid seat/);assert.throws(()=>f.arena.revoke(id,'judge'),/Invalid seat/);
+ assert.throws(()=>f.arena.identity(token),/Unauthorized/);assert.throws(()=>f.arena.claim(oldIdentity),/revoked/);assert.throws(()=>f.arena.park(oldIdentity),/revoked/);assert.throws(()=>submitAction(f.arena,oldIdentity,{taskId:'pending-judge',attemptId:'pending-attempt',result:{verdict:'acknowledge'}}),/revoked/);assert.throws(()=>f.arena.connect({match:id,seat:'judge',invitation,provider:'simulated',session:'old'}),/Invalid seat/);assert.throws(()=>f.arena.revoke(id,'judge'),/Invalid seat/);
  assert.deepEqual(f.arena.public(m).participants.map(p=>p.seat),['red','black']);
  const roomFile=path.join(f.root,'xiangqi',id+'.json'),beforeRestart=fs.readFileSync(roomFile,'utf8'),metadata=fs.readFileSync(path.join(f.root,'state.json'),'utf8');f.restart();assert.equal(fs.readFileSync(roomFile,'utf8'),beforeRestart);assert.equal(fs.readFileSync(path.join(f.root,'state.json'),'utf8'),metadata);assert.equal(f.arena.get(id).adminTasks.length,1);
  let reads=0,sends=0;const wake=new WakeService(f.arena,{adapters:{opencode:{async read(){reads++;return {}},async send(){sends++;return {delivered:true}}}}});
@@ -141,7 +142,7 @@ test('Admin HTTP controls require authorization, reject arbitrary game fields, a
  assert.equal((await post({action:'pause',game:{winner:'red'}})).status,400);assert.equal(app.arena.get(id).paused,false);
  assert.equal((await post({action:'pause'})).status,200);assert.equal(app.arena.get(id).paused,true);
  assert.equal((await post({action:'resume'})).status,200);assert.equal(app.arena.get(id).paused,false);
- const {job}=app.arena.claim(ids.red);app.arena.submit(ids.red,{...job,result:{from:[0,6],to:[0,3]}});
+ const {job}=app.arena.claim(ids.red);submitAction(app.arena,ids.red,{...job,result:{from:[0,6],to:[0,3]}});
  const response=await fetch(app.origin+`/api/matches/${id}/admin`,{headers:{Authorization:'Bearer no-judge-admin'}}),admin=await response.json();assert.equal(admin.tasks.length,1);assert.ok(!JSON.stringify(admin).includes(job.taskId));
  assert.equal((await post({action:'retry',taskId:admin.tasks[0].id,result:{from:[0,6],to:[0,5]}})).status,400);
  assert.equal((await post({action:'end',winner:'red'})).status,400);assert.equal((await post({action:'end'})).status,200);assert.equal(app.arena.get(id).game.winner,null);

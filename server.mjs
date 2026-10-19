@@ -10,12 +10,13 @@ import {WakeService} from './lib/wake.mjs';
 import {RelayService} from './lib/relay.mjs';
 import {networkAddresses} from './lib/network.mjs';
 import {relayInvitation} from './lib/invitation.mjs';
+import {GAME_RULES} from './lib/rules.mjs';
 import {markdownDisposition} from './lib/export.mjs';
 
 const here=path.dirname(fileURLToPath(import.meta.url));
 export const clientFiles=['client.mjs','relay-client.mjs','lib/network.mjs','lib/relay-worker.mjs','lib/wake/common.mjs','lib/wake/host.mjs','lib/wake/index.mjs','lib/wake/codex.mjs','lib/wake/mimo.mjs','lib/wake/qoder.mjs','lib/wake/codearts.mjs','lib/wake/opencode.mjs','lib/wake/dsh.mjs','.opencode/plugins/arena-codearts.js'];
-const publicFiles=new Set(['index.html','app.js','ui.js','groupchat.js','groupchat.css','chess-ui.js','chess3d.mjs','chess-coordinates.mjs','chess.css','vendor/three/three.module.js','vendor/three/OrbitControls.js','werewolf.js','theme.js','style.css','werewolf.css','assets/avatars/manifest.json']);
-const mime=file=>file.endsWith('.html')?'text/html; charset=utf-8':/\.(?:m?js)$/.test(file)?'text/javascript; charset=utf-8':file.endsWith('.svg')?'image/svg+xml':file.endsWith('.png')?'image/png':file.endsWith('.json')?'application/json; charset=utf-8':'text/css; charset=utf-8';
+const publicFiles=new Set(['presentation.js','party-reboot.css','assets/presentation/manifest.json','index.html','app.js','ui.js','groupchat.js','groupchat.css','party.js','party.css','chess-ui.js','chess3d.mjs','chess-coordinates.mjs','chess.css','vendor/three/three.module.js','vendor/three/OrbitControls.js','werewolf.js','theme.js','style.css','werewolf.css','assets/avatars/manifest.json']);
+const mime=file=>file.endsWith('.html')?'text/html; charset=utf-8':/\.(?:m?js)$/.test(file)?'text/javascript; charset=utf-8':file.endsWith('.svg')?'image/svg+xml':file.endsWith('.webp')?'image/webp':file.endsWith('.png')?'image/png':file.endsWith('.json')?'application/json; charset=utf-8':'text/css; charset=utf-8';
 
 export async function serve({port=Number(process.env.PORT||4318),host=process.env.HOST||'0.0.0.0',root=process.env.ARENA_DATA||path.join(here,'.arena'),adminToken=process.env.ARENA_ADMIN_TOKEN||randomBytes(32).toString('hex'),wakeOptions={},arenaOptions={},autoTick=true,interfaces}={}){
  if(!Number.isInteger(port)||port<0||port>65535||!['0.0.0.0','127.0.0.1'].includes(host))throw Error('Use PORT 1..65535 and HOST 0.0.0.0 or 127.0.0.1');
@@ -39,7 +40,7 @@ export async function serve({port=Number(process.env.PORT||4318),host=process.en
    const admin=()=>{const a=Buffer.from(bearer),b=Buffer.from(adminToken);if(a.length!==b.length||!timingSafeEqual(a,b))throw Error('Admin authorization required')};
    if(req.method==='GET'){
     const file=url.pathname==='/'?'index.html':url.pathname.slice(1);
-    if(publicFiles.has(file)||/^assets\/avatars\/[a-z0-9-]+\.(?:svg|png)$/.test(file))return staticFile(path.join(here,'public',file));
+    if(publicFiles.has(file)||/^assets\/presentation\/(?:animals|scenes)\/[a-z0-9-]+\.webp$/.test(file)||/^assets\/games\/[a-z0-9-]+\.svg$/.test(file)||/^assets\/avatars\/[a-z0-9-]+\.(?:svg|png)$/.test(file))return staticFile(path.join(here,'public',file));
     if(url.pathname==='/downloads/arena-bootstrap.mjs')return staticFile(path.join(here,'public','arena-bootstrap.mjs'),true);
     if(url.pathname.startsWith('/downloads/')){
      const item=url.pathname.slice('/downloads/'.length);
@@ -47,6 +48,7 @@ export async function serve({port=Number(process.env.PORT||4318),host=process.en
      return reply(404,{error:'Not found'});
     }
     if(url.pathname==='/api/client-manifest')return reply(200,{files:clientFiles.map(item=>{const bytes=fs.readFileSync(path.join(here,item));return {path:item,sha256:createHash('sha256').update(bytes).digest('hex')}})});
+    if(url.pathname==='/api/rules')return reply(200,GAME_RULES);
     if(url.pathname==='/api/network')return reply(200,{localOrigin:network.origin,lanOrigins:network.lanOrigins});
     if(url.pathname==='/api/admin'){admin();return reply(200,{ok:true})}
     if(url.pathname==='/api/matches')return reply(200,Object.values(store.state.matches).map(m=>({id:m.id,runId:m.runId,runNumber:m.runNumber,title:m.title,kind:m.kind,createdAt:m.createdAt,status:m.game.status,started:m.started})));
@@ -59,7 +61,7 @@ export async function serve({port=Number(process.env.PORT||4318),host=process.en
     match=url.pathname.match(/^\/api\/matches\/([^/]+)\/messages$/);
     if(match)return reply(200,arena.messages(match[1],{runId:url.searchParams.get('runId')||undefined,...(url.searchParams.has('before')?{before:Number(url.searchParams.get('before'))}:{}),...(url.searchParams.has('limit')?{limit:Number(url.searchParams.get('limit'))}:{})}));
     match=url.pathname.match(/^\/api\/matches\/([^/]+)\/runs\/([^/]+)$/);
-    if(match)return reply(200,arena.publicRun(match[1],match[2]));
+    if(match){const reveal=url.searchParams.get('reveal')==='1';if(reveal)admin();return reply(200,arena.publicRun(match[1],match[2],reveal))}
     match=url.pathname.match(/^\/api\/matches\/([^/]+)\/(admin|connections)$/);
     if(match){admin();return reply(200,match[2]==='admin'?arena.adminView(match[1]):wake.diagnostics(match[1]))}
     match=url.pathname.match(/^\/api\/matches\/([^/]+)$/);
@@ -121,6 +123,7 @@ export async function serve({port=Number(process.env.PORT||4318),host=process.en
    if(url.pathname==='/api/control'){const {match,...control}=v;return reply(200,arena.control(match,control))}
    if(url.pathname==='/api/matches')return reply(201,arena.create(v));
    if(url.pathname==='/api/chat-members'){const {match,...input}=v;return reply(200,arena.chatMembers(match,input))}
+   if(url.pathname==='/api/participant-appearance')return reply(200,arena.setAppearance(v.match,v.seat,v.animalId));
    if(url.pathname==='/api/participant-type')return reply(200,arena.setParticipantType(v.match,v.seat,v.type));
    if(url.pathname==='/api/room-invite'||url.pathname==='/api/invite'){
     const transport=v.wakeTransport||'local';

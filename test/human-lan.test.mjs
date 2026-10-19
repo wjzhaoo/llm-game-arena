@@ -1,3 +1,4 @@
+import {submitAction} from './action-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
@@ -39,16 +40,16 @@ for(const kind of ['xiangqi','blind']){
   assert.throws(()=>a.setParticipantType(id,'red','ai'),/撤销/);
   a.start(id);assert.throws(()=>a.setParticipantType(id,'black','human'),/开始后/);
   const {job}=a.claim(ids.red),deadline=job.deadline;
-  for(let i=0;i<3;i++){assert.equal(a.submit(ids.red,{...job,result:{from:[0,6],to:[0,3]}}).ok,false)}
+  for(let i=0;i<3;i++){assert.equal(submitAction(a,ids.red,{...job,result:{from:[0,6],to:[0,3]}}).ok,false)}
   assert.equal(a.get(id).jobs[0].invalid,0);assert.equal(a.get(id).jobs[0].deadline,deadline);assert.equal(a.get(id).game.ply,0);
-  assert.throws(()=>a.submit(ids.black,{...job,result:{from:[0,6],to:[0,5]}}),/foreign/);
+  assert.throws(()=>submitAction(a,ids.black,{...job,result:{from:[0,6],to:[0,5]}}),/foreign/);
   const action={...job,result:{from:[0,6],to:[0,5]}};
-  assert.equal(a.submit(ids.red,action).ok,true);assert.equal(a.submit(ids.red,action).duplicate,true);assert.equal(a.get(id).game.ply,1);
+  assert.equal(submitAction(a,ids.red,action).ok,true);assert.equal(submitAction(a,ids.red,action).duplicate,true);assert.equal(a.get(id).game.ply,1);
   if(kind==='blind'){
    const view=a.public(a.get(id));assert.equal(view.game.board.flat().filter(p=>p?.hidden).length,29);
    assert.ok(!JSON.stringify(view).includes('"cs"'));assert.ok(!JSON.stringify(view.history).includes('"ck"'));
   }
-  const black=a.claim(ids.black).job;a.pause(id);clock.now+=5000;assert.throws(()=>a.submit(ids.black,{...black,result:{from:[0,3],to:[0,4]}}),/paused/);a.resume(id);
+  const black=a.claim(ids.black).job;a.pause(id);clock.now+=5000;assert.throws(()=>submitAction(a,ids.black,{...black,result:{from:[0,3],to:[0,4]}}),/paused/);a.resume(id);
   assert.equal(a.get(id).jobs.find(j=>j.taskId===black.taskId).deadline,black.deadline+5000);
   clock.now=a.get(id).jobs.find(j=>j.taskId===black.taskId).deadline+1;a.tick();assert.equal(a.get(id).game.winner,'red');
  });
@@ -59,7 +60,7 @@ for(const kind of ['xiangqi','blind']){
   a.revoke(id,'red');assert.throws(()=>a.playerStatus(ids.red),/revoked/);
   const invite=a.roomInvite(id,'http://127.0.0.1:4318'),joined=a.joinHuman({match:id,seat:'red',nickname:'接续',invitation:joinToken(invite)}),replacement=a.identity(joined.token),next=a.claim(replacement).job;
   assert.equal(next.deadline,first.deadline);assert.notEqual(next.attemptId,first.attemptId);
-  assert.throws(()=>a.submit(ids.red,{...first,result:{from:[0,6],to:[0,5]}}),/revoked/);
+  assert.throws(()=>submitAction(a,ids.red,{...first,result:{from:[0,6],to:[0,5]}}),/revoked/);
   assert.equal(a.resign(replacement).completed,true);assert.equal(a.get(id).game.winner,'black');
   assert.equal(a.get(id).jobs.filter(j=>j.status==='open').length,0);
  });
@@ -79,7 +80,7 @@ for(const humanSeats of [['p1','p2','p3','p4','p5','p6'],['p1','p3']]){
    for(const seat of a.pending(m)){
     const job=a.claim(ids[seat]).job;
     const result=phase==='wolf'?{type:'kill',target:round===1?'p5':'p6'}:phase==='seer'?{type:'inspect',target:round===1?'p1':'p2'}:phase==='witch'?{type:'witch',save:false,poison:null}:phase==='discuss'?{type:'speak',text:'公开发言'}:{type:'vote',target:round===1?'p1':'p2'};
-    assert.equal(a.submit(ids[seat],{...job,result}).ok,true);
+    assert.equal(submitAction(a,ids[seat],{...job,result}).ok,true);
    }
   }
   assert.equal(a.get(id).game.winner,'good');

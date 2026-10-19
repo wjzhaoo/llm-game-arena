@@ -35,6 +35,7 @@ async function browser({clipboard,legacy=true,unselectable=false}={}){
   navigator:clipboard?{clipboard}: {},setInterval(){},
   fetch:async(route,options)=>({ok:true,status:200,json:async()=>route==='/api/network'?{localOrigin:'http://127.0.0.1:4318',lanOrigins:['http://192.168.50.2:4318']}:route==='/api/matches'?[]:route==='/api/invite'?{seat:JSON.parse(options.body).seat,text:'更新后的邀请提示词'}:{}})
  });
+ vm.runInContext(fs.readFileSync(new URL('../public/presentation.js',import.meta.url),'utf8'),ctx);
  vm.runInContext(fs.readFileSync(new URL('../public/app.js',import.meta.url),'utf8'),ctx);
  await new Promise(resolve=>setImmediate(resolve));
  return {ctx,document,element,nodes,copyCalls,copied:()=>copied};

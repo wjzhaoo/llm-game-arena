@@ -1,5 +1,7 @@
+const expressionDrafts=new Map();
 const $=id=>document.getElementById(id);
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function setHTML(root,html){if(root.dataset.renderHtml!==html){root.innerHTML=html;root.dataset.renderHtml=html}}
 const memory=new Map();
 function stored(key){return memory.get(key)||null}
 function save(key,value){if(value===null)memory.delete(key);else memory.set(key,value)}
@@ -13,7 +15,8 @@ try{
 const initialUrl=new URL(location.href);
 let current=initialUrl.searchParams.get('room'),match=null,admin='',replay=null;
 let selectedRun=initialUrl.searchParams.get('run'),activeMatch=null,roomList=[],refreshRequested=false,restartTarget=null,deleteTarget=null;
-let exportTarget=null,exporting=false;
+let exportTarget=null,exporting=false,gameRules={};
+const partyKind=kind=>['undercover','liarsdice','codenames','spyfall'].includes(kind);
 const historical=()=>!!match?.readOnly;
 const chatKey=()=>current+':'+(match?.runId||'first');
 const folds=new Map();let foldContext='';
@@ -23,7 +26,7 @@ let playerData=null,humanJob=null,selectedCell=null,boardContext='',panelContext
 let chessStage=null,chessMode='2d',interactionBusy=false;
 let ww={room:null,seen:null,prevPhase:null,poppedId:null,player:null};
 function wwPlayer(){
- if(!ww.player)ww.player=ArenaWerewolf.createPlayer({fx:$('fx'),board:$('board'),reducedMotion:matchMedia('(prefers-reduced-motion: reduce)').matches});
+ if(!ww.player)ww.player=ArenaWerewolf.createPlayer({fx:$('fx'),board:$('board'),reducedMotion:$('reducedMotion').checked||matchMedia('(prefers-reduced-motion: reduce)').matches});
  return ww.player;
 }
 let invitationRequest=0,invitationSeat=null,avatarManifest={},network={localOrigin:location.origin,lanOrigins:[]},autoJoin=true;
@@ -33,8 +36,8 @@ if(current&&new URLSearchParams(initialUrl.hash.slice(1)).has('join')){
  save('arenaJoin:'+current,new URLSearchParams(initialUrl.hash.slice(1)).get('join'));
  history.replaceState(null,'',initialUrl.pathname+initialUrl.search);
 }
-const seatTitle=seat=>seat==='red'?'红方选手':seat==='black'?'黑方选手':seat.replace(/^p/,'')+' 号选手';
-const kinds={xiangqi:'中国象棋',blind:'覆棋盲棋',werewolf:'六人狼人杀',groupchat:'自由群聊'};
+const seatTitle=seat=>match?.kind==='codenames'?({p1:'红队队长',p2:'红队猜词者',p3:'蓝队队长',p4:'蓝队猜词者'}[seat]||seat):seat==='red'?'红方选手':seat==='black'?'黑方选手':seat.replace(/^p/,'')+' 号选手';
+const kinds={xiangqi:'中国象棋',blind:'覆棋盲棋',werewolf:'六人狼人杀',groupchat:'自由群聊',undercover:'谁是卧底',liarsdice:'骗子骰子',codenames:'行动代号',spyfall:'谍报危机'};
 function credential(){try{return JSON.parse(stored('arenaPlayer:'+current)||'null')}catch{return null}}
 function updateAddress(){
  const url=new URL(location.href);if(current)url.searchParams.set('room',current);else url.searchParams.delete('room');
@@ -45,7 +48,7 @@ function resetView(){replay=null;playerData=null;humanJob=null;selectedCell=null
 function selectRoom(id){
  if(match?.kind==='groupchat')rememberChatDraft();
  if($('exportDialog').open)$('exportDialog').close();exportTarget=null;
- current=id;selectedRun=null;match=null;activeMatch=null;resetView();updateAddress();
+ current=id;selectedRun=null;match=null;activeMatch=null;resetView();delete $('board').dataset.renderHtml;updateAddress();
 }
 async function selectRun(id){
  if(match?.kind==='groupchat')rememberChatDraft();
@@ -60,17 +63,18 @@ function forgetRoom(id){
  for(const name of ['inviteDialog','joinDialog','chatProfileDialog','restartDialog'])if($(name).open)$(name).close();
 }
 function renderEmpty(){
+ $('arenaGrid').className='arena-grid lobby-grid';$('connectionsPanel').hidden=true;
  if(chessStage){chessStage.destroy();chessStage=null}if(ww.player)ww.player.reset();ww.room=null;
- resetView();$('title').textContent='棋逢对手，思想成局';$('subtitle').textContent='创建房间，邀请选手，开启一场新的相遇';$('status').textContent='等待开局';
- $('phase').textContent='选择或创建一个房间';$('board').className='empty';delete $('board').dataset.chatHtml;
- $('board').innerHTML='<div class="hero-mark">弈</div><h2>一场比赛，多种智慧</h2><p>创建房间，邀请真人或 AI 会话加入</p>';
+ resetView();$('title').textContent='一桌动物，全是戏精';$('subtitle').textContent='选个玩法，叫上朋友和 AI，开演！';$('status').textContent='等待开局';
+ $('phase').textContent='挑个玩法，马上开桌';$('gameKind').textContent='8 GAMES · ANIMAL PARTY';$('revealNotice').hidden=true;$('revealDetails').hidden=true;$('board').className='empty';delete $('board').dataset.chatHtml;
+ setHTML($('board'),ArenaPresentation.lobby(gameRules));setHTML($('sceneBanner'),'');setHTML($('stageRoster'),'');$('stateControls').hidden=true;
  for(const id of ['startButton','pauseButton','endButton','restartButton','exportButton','shareRoom','reveal','replay','backLive'])$(id).disabled=true;
  for(const id of ['runNavigation','playerControls','chatAdminTools','adminTasks'])$(id).hidden=true;
- $('players').innerHTML='';$('count').textContent='0 / 0';$('events').innerHTML='<p class="muted">尚无比赛记录</p>';$('replayLabel').textContent='尚无记录';$('live').textContent='';
+ setHTML($('players'),'');$('count').textContent='0 / 0';$('events').innerHTML='<p class="muted">尚无比赛记录</p>';$('replayLabel').textContent='尚无记录';$('live').textContent='';
 }
 function renderRooms(){
  const html=roomList.slice().reverse().map(m=>'<div class="room-row '+(current===m.id?'active':'')+'"><button class="room '+(current===m.id?'active':'')+'" data-id="'+esc(m.id)+'"><strong>'+esc(m.title)+'</strong><small>'+kinds[m.kind]+' · '+(m.status==='finished'?'已结束':m.started?'进行中':'待接入')+'</small></button>'+(admin?'<button class="room-delete" data-delete-id="'+esc(m.id)+'" title="删除房间" aria-label="删除房间 '+esc(m.title)+'"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 10v7M14 10v7"/></svg></button>':'')+'</div>').join('');
- if($('matches').innerHTML!==html)$('matches').innerHTML=html;
+ setHTML($('matches'),html);
 }
 function shareBase(){return $('shareAddress').value||network.lanOrigins[0]||network.localOrigin}
 function notify(value){
@@ -146,7 +150,7 @@ async function openJoin(){
  if(match.kind!=='groupchat'&&!$('humanSeat').options.length)notify('暂无空闲真人席位，请让房主在开局前设置选手类型');
 }
 function invitationPrompt(invitation){
- if(invitation.seat!==invitationSeat||!(match?.kind==='groupchat'?match.participants.some(p=>p.seat===invitation.seat):['red','black','p1','p2','p3','p4','p5','p6'].includes(invitation.seat)))throw Error('邀请返回了不同的席位');
+ if(invitation.seat!==invitationSeat||!(match?.participants?.map(p=>p.seat)||['red','black','p1','p2','p3','p4','p5','p6']).includes(invitation.seat))throw Error('邀请返回了不同的席位');
  return (invitation.nickname?'选手昵称：'+invitation.nickname+'\n':'')+'本邀请仅供'+seatTitle(invitation.seat)+'（'+invitation.seat+'）使用。\n'+invitation.text;
 }
 async function loadInvitation(){
@@ -170,10 +174,12 @@ async function participantAction(button){
  $('inviteNickname').value=p.nickname||'';$('copyInvite').textContent='复制邀请';$('copyInvite').disabled=true;$('inviteText').value='';$('inviteDialog').showModal();
  if(match.kind==='groupchat')await loadInvitation();else notify('可填写 AI 昵称，再点击「生成邀请」');
 }
+$('reducedMotion').onchange=()=>{document.documentElement.dataset.reducedMotion=String($('reducedMotion').checked);ww.player?.reset();ww.player=null};
 $('themePreference').value=ArenaTheme.preference;
 $('themePreference').onchange=event=>{ArenaTheme.set(event.target.value);if(match)render()};
 document.addEventListener('error',event=>{if(event.target instanceof HTMLImageElement&&event.target.classList.contains('avatar-image')){event.target.hidden=true;event.target.previousElementSibling?.setAttribute('aria-hidden','false')}},true);
 for(const button of document.querySelectorAll('[data-close]'))button.onclick=()=>$(button.dataset.close).close();
+$('homeLink').onclick=event=>{event.preventDefault();selectRoom(null);playerData=null;humanJob=null;match=null;activeMatch=null;renderRooms();renderEmpty()};
 $('adminButton').onclick=()=>$('adminDialog').showModal();
 $('saveAdmin').onclick=()=>safe(async()=>{
  const button=$('saveAdmin'),value=$('adminCode').value.trim();button.disabled=true;
@@ -184,8 +190,19 @@ $('saveAdmin').onclick=()=>safe(async()=>{
   admin=value;$('adminCode').value='';$('adminDialog').close();notify('管理码验证通过，仅当前页面有效');await refresh();
  }finally{button.disabled=false}
 });
-$('newButton').onclick=()=>safe(async()=>{manage();$('createDialog').showModal()});
-$('kind').onchange=()=>{$('chatTopicField').hidden=$('kind').value!=='groupchat'};
+function showRules(kind){
+ const chosen=kind||match?.kind||$('kind').value;
+ $('rulesKind').innerHTML=Object.entries(kinds).map(([key,name])=>'<option value="'+key+'">'+name+'</option>').join('');$('rulesKind').value=chosen;
+ $('rulesContent').innerHTML=gameRules[chosen]&&globalThis.ArenaParty?ArenaParty.rulebook(gameRules[chosen],chosen):'<p>规则加载中，请稍后重试。</p>';$('rulesDialog').showModal();
+}
+function createOptions(){
+ const kind=$('kind').value,meta=gameRules[kind],party=partyKind(kind);$('chatTopicField').hidden=kind!=='groupchat';$('playerCountField').hidden=!party||kind==='codenames';
+ if(meta){$('partyPlayerCount').innerHTML=Array.from({length:(meta.players[1]||meta.players[0])-meta.players[0]+1},(_,i)=>'<option value="'+(meta.players[0]+i)+'">'+(meta.players[0]+i)+' 人</option>').join('');$('partyPlayerCount').value=String(meta.defaultPlayers);$('gamePreview').innerHTML=ArenaPresentation.scene(kind,{compact:true})+'<div><strong>'+esc(meta.name)+'</strong><p>'+esc(meta.tagline)+'</p></div>'}
+}
+function openCreateGame(kind){safe(async()=>{manage();if(kind)$('kind').value=kind;createOptions();$('createDialog').showModal()})}
+$('newButton').onclick=()=>openCreateGame();
+$('kind').onchange=createOptions;
+$('rulesButton').onclick=()=>showRules();$('createRules').onclick=()=>showRules($('kind').value);$('rulesKind').onchange=()=>{const rules=gameRules[$('rulesKind').value];if(rules)$('rulesContent').innerHTML=ArenaParty.rulebook(rules,$('rulesKind').value)};
 $('chatAddAI').onclick=()=>safe(async()=>{manage();openChatProfile('add-ai')});
 $('chatJoin').onclick=()=>safe(openJoin);
 $('chatRestart').onclick=()=>safe(async()=>{manage();await api('/api/control',{match:current,action:'chat-restart'},true);await refresh()});
@@ -202,7 +219,7 @@ $('saveChatProfile').onclick=()=>safe(async()=>{
 $('create').onclick=()=>safe(async()=>{
  const button=$('create');button.disabled=true;
  try{
-  const room=await api('/api/matches',{kind:$('kind').value,title:$('roomTitle').value,timeoutSeconds:Number($('timeout').value),...($('kind').value==='groupchat'?{topic:$('chatTopic').value}:{})},true);
+  const room=await api('/api/matches',{kind:$('kind').value,title:$('roomTitle').value,timeoutSeconds:Number($('timeout').value),...(partyKind($('kind').value)?{playerCount:$('kind').value==='codenames'?4:Number($('partyPlayerCount').value)}:{}),...($('kind').value==='groupchat'?{topic:$('chatTopic').value}:{})},true);
   selectRoom(room.id);replay=null;playerData=null;humanJob=null;autoJoin=false;$('createDialog').close();
   notify(room.kind==='groupchat'?'群聊已创建，可添加 AI 或邀请真人加入':'房间已创建，请在选手旁选择真人或 AI，并分别邀请接入');await refresh();
  }finally{button.disabled=false}
@@ -277,12 +294,13 @@ $('joinHuman').onclick=()=>safe(async()=>{
  const button=$('joinHuman');button.disabled=true;
  try{
   const room=current,out=await api('/api/player',{action:'join',match:room,seat:$('humanSeat').value,nickname:$('nickname').value,invitation:stored('arenaJoin:'+room),...(match.kind==='groupchat'?{profile:{personality:$('joinPersonality').value,initialOpinion:$('joinOpinion').value}}:{})});
-  save('arenaPlayer:'+room,JSON.stringify(out));$('joinDialog').close();$('reveal').checked=false;replay=null;humanJob=null;notify(match.kind==='groupchat'?'已加入群聊'+(match.started?'，从下一轮开始参与':'，等待房主开始讨论'):'已加入 '+seatTitle(out.seat)+'，等待全员接入后开局');await refresh();
+  save('arenaPlayer:'+room,JSON.stringify(out));$('joinDialog').close();$('reveal').checked=false;replay=null;humanJob=null;notify(match.kind==='groupchat'?'已加入群聊'+(match.started?'，从下一轮开始参与':'，等待房主开始讨论'):'已加入 '+seatTitle(out.seat)+(match.started?'，可在本人操作区接续行动':'，等待全员接入后开局'));await refresh();
  }finally{joinOptions()}
 });
 $('replay').oninput=()=>{replay=Number($('replay').value);render()};
 $('backLive').onclick=()=>{replay=null;render()};
 $('players').onchange=event=>safe(async()=>{
+ const animalSeat=event.target.dataset.animalSeat;if(animalSeat){manage();await api('/api/participant-appearance',{match:current,seat:animalSeat,animalId:event.target.value},true);await refresh();return}
  const seat=event.target.dataset.participantType;if(!seat)return;
  manage();await api('/api/participant-type',{match:current,seat,type:event.target.value},true);await refresh();
 });
@@ -305,7 +323,9 @@ $('taskList').onclick=event=>safe(async()=>{
  manage();button.disabled=true;try{await api('/api/control',{match:current,action:'retry',taskId:button.dataset.retryTask},true)}finally{await refresh()}
 });
 $('board').onclick=event=>safe(async()=>{
+ const createKind=event.target.closest('[data-create-kind]');if(createKind){openCreateGame(createKind.dataset.createKind);return}
  if(event.target.closest('[data-chat-history]')){await loadChatHistory();return}
+ const code=event.target.closest('[data-code-index]');if(code){if(!code.disabled)await submitHuman({type:'guess',index:Number(code.dataset.codeIndex)});return}
  const button=event.target.closest('[data-cell],[data-target]');if(!button)return;
  await chessSquare((button.dataset.cell||button.dataset.target).split(',').map(Number),!!button.dataset.target);
 });
@@ -324,6 +344,7 @@ async function chessSquare(cell,target=false){
 }
 $('board').onkeydown=event=>{if(event.key==='Escape'){selectedCell=null;render()}};
 $('playerControls').onsubmit=event=>{event.preventDefault();safe(async()=>{
+ if(partyKind(match?.kind)){await submitHuman(ArenaParty.readAction(playerData.privateView,$));return}
  if(match?.kind==='groupchat'){const result=humanJob?.kind==='chat-bid'?{type:'bid',score:Number($('chatScore').value)}:{type:'speak',text:$('speechText').value,...($('chatSpeechEmote').value?{emote:{id:$('chatSpeechEmote').value,targetSeat:$('chatEmoteTarget').value||null}}:{})};await submitHuman(result);return}
  const target=$('actionTarget')?.value||null,phase=playerData?.privateView.phase;
  let result;
@@ -336,6 +357,8 @@ $('playerControls').onsubmit=event=>{event.preventDefault();safe(async()=>{
  await submitHuman(result);
 })};
 $('playerControls').onclick=event=>safe(async()=>{
+ const partyCommand=event.target.closest('[data-party-command]');
+ if(partyCommand){if(partyCommand.disabled)return;const type=partyCommand.dataset.partyCommand;if(type==='guess-location'&&!$('spyLocation').value)throw Error('请选择一个地点');await submitHuman({type,...(type==='guess-location'?{location:$('spyLocation').value}:{})});return}
  if(match?.kind==='groupchat'&&await chatPlayerAction(event))return;
  const button=event.target.closest('[data-resign],[data-undo],[data-undo-answer],[data-emote]');
  if(!button||button.disabled||interactionBusy||submitting||replay!==null||historical()||match.paused)return;
@@ -347,14 +370,26 @@ $('playerControls').onclick=event=>safe(async()=>{
   await api('/api/player',body,false,me.token);selectedCell=null;
  }finally{interactionBusy=false;panelContext='';if(current===room)await refresh()}
 });
+$('stateControls').onclick=event=>{const button=event.target.closest('[data-state]');if(!button||button.disabled)return;expressionDrafts.set(expressionKey(),button.dataset.state);renderStatePicker()};
+function expressionKey(){return chatKey()+':'+playerData?.seat}
+function renderStatePicker(){
+ const root=$('stateControls');root.hidden=!playerData||replay!==null||historical()||match?.game.status==='finished';if(root.hidden)return;
+ const own=playerData.privateView.ownPresentation||{},person=match.participants.find(p=>p.seat===playerData.seat)||{};
+ const night=match.kind==='werewolf'&&['night','wolf','seer','witch'].includes(playerData.privateView.phase);
+ const selected=expressionDrafts.get(expressionKey())||(night?own.privateState:null)||own.sealedState||person.state||'平静';
+ const sealed=match.game.phase==='vote'||match.kind==='groupchat'&&match.game.phase==='bid';
+ const notice=night?'本次为夜间行动：表情仅你和管理员可见，公共头像保持原状态。':sealed?'本次表情随行动封存，公开结算时与其他人的表情统一公布。':'其他玩家会随你的行动看到这个表情。你可以真情流露，也可以装模作样。';
+ const html=ArenaPresentation.picker(person,selected,{disabled:!humanJob||match.paused,notice});
+ if(root.dataset.html!==html){const open=root.querySelector('details')?.open??true;root.innerHTML=html;root.dataset.html=html;const details=root.querySelector('details');if(details)details.open=open}
+}
 async function submitHuman(result){
  if(submitting||replay!==null||historical()||!humanJob||!playerData||match.paused)return;
- const room=current,me=credential(),job=humanJob;submitting=true;
+ const room=current,me=credential(),job=humanJob;result={...result,state:expressionDrafts.get(expressionKey())||$('stateControls').querySelector('[data-state][aria-pressed="true"]')?.dataset.state||match.participants.find(p=>p.seat===playerData.seat)?.state||'平静'};submitting=true;
  $('playerControls').querySelector('button[type="submit"]')?.setAttribute('disabled','');
  try{
   const out=await api('/api/player',{action:'submit',taskId:job.taskId,attemptId:job.attemptId,result},false,me.token);
   if(!out.ok)throw Error(out.details||out.error);
-  selectedCell=null;notify('行动已提交');
+  expressionDrafts.delete(expressionKey());selectedCell=null;notify('行动已提交');
  }finally{
   submitting=false;if(current===room)await refresh();
   $('playerControls').querySelector('button[type="submit"]')?.removeAttribute('disabled');
@@ -367,7 +402,7 @@ async function refresh(){
   const rooms=await api('/api/matches');
   roomList=rooms;
   if(current&&!rooms.some(m=>m.id===current)){const removed=current;forgetRoom(removed);selectRoom(null);notify('当前房间已被删除')}
-  if(!current&&rooms.length)selectRoom(rooms.at(-1).id);
+
   renderRooms();
   if(!current){renderEmpty();return}
   const room=current,selection=selectedRun,me=credential();
@@ -378,7 +413,7 @@ async function refresh(){
   activeMatch=data;
   if(selectedRun&&(selectedRun===data.runId||!data.runs?.some(r=>r.runId===selectedRun))){selectedRun=null;updateAddress()}
   if(selectedRun){
-   const runId=selectedRun,archived=await api('/api/matches/'+encodeURIComponent(room)+'/runs/'+encodeURIComponent(runId));
+   const runId=selectedRun,archived=await api('/api/matches/'+encodeURIComponent(room)+'/runs/'+encodeURIComponent(runId)+($('reveal').checked?'?reveal=1':''),null,$('reveal').checked);
    if(current!==room||selectedRun!==runId)return;
    match=archived;match.connections=[];match.admin=null;playerData=null;humanJob=null;render();return;
   }
@@ -436,15 +471,18 @@ function connectionText(p){
 }
 function render(){
  if(!match)return;
- const g=replay===null?match.game:(match.history[replay]?.game||match.game),finished=match.game.status==='finished';
+ $('arenaGrid').className='arena-grid';$('connectionsPanel').hidden=false;
+ const g=replay===null?(partyKind(match.kind)&&playerData?playerData.privateView:match.game):(match.history[replay]?.game||match.game),finished=match.game.status==='finished';
+ const stagePeople=replay===null?match.participants:(g.participants||match.history[replay]?.eventPeople||(g.members||match.participants).map(p=>({...p,animalId:null,state:null})));
+ const sceneHtml=ArenaPresentation.scene(match.kind,{phase:g.phase});setHTML($('sceneBanner'),sceneHtml);const rosterHtml=['xiangqi','blind'].includes(match.kind)?ArenaPresentation.roster(stagePeople,{duel:true}):['groupchat','codenames'].includes(match.kind)?ArenaPresentation.roster(stagePeople):'';setHTML($('stageRoster'),rosterHtml);
  const focused=document.activeElement,focusCell=focused?.dataset?.cell,focusTarget=focused?.dataset?.target;
  $('title').textContent=match.title;$('subtitle').textContent=kinds[match.kind]+(match.kind==='groupchat'?' · 自由讨论 · 意愿决定发言':' · 真人与 AI 同席 · 规则引擎校验');
- $('status').textContent=historical()?'历史记录 · 只读':match.kind==='groupchat'?(g.status==='finished'?'聊天已结束':match.paused?'房主已暂停':match.started?'讨论中':'等待成员'):match.paused?'房主已暂停':g.status==='finished'?'已结束 · '+(g.winner||'平局'):match.started?'正在进行':'等待选手';
+ $('status').textContent=historical()?'历史记录 · 只读':match.kind==='groupchat'?(g.status==='finished'?'聊天已结束':match.paused?'房主已暂停':match.started?'讨论中':'等待成员'):match.paused?'房主已暂停':g.status==='finished'?'已结束 · '+(partyKind(match.kind)?({civilians:'平民胜',undercover:'卧底胜',red:'红队胜',blue:'蓝队胜',spy:'间谍胜',agents:'普通玩家胜'}[g.winner]||(g.winner?ArenaParty.label(g.winner,match.participants)+' 获胜':'未分胜负')):(g.winner||'平局')):match.started?'正在进行':'等待选手';
  renderNavigation();
  $('gameKind').textContent=match.kind.toUpperCase();
  $('protocolHint').textContent=match.kind==='groupchat'?'报分决定发言 · 表情随时互动 · 设定仅本人和房主可见':'规则引擎裁定合法性，管理员处理异常';$('transcriptHint').textContent=match.kind==='groupchat'?'公开聊天与表情 · 不包含成员私有设定':'公开信息流 · 私有夜间行动不在此显示';
  const frame=replay===null?match:match.history[replay],chessPhase=g.status==='finished'?'本局已结束':frame?.paused?'比赛已暂停':frame?.undoRequest?'等待'+seatTitle(frame.undoRequest.responder)+'确认悔棋':!(frame?.started??match.started)?'等待开局':(g.turn==='red'?'红方':'黑方')+'行棋';
- $('phase').textContent=match.kind==='groupchat'?'第 '+g.round+' 轮 · '+({bid:'征集意愿',speak:'成员发言',idle:'等待讨论',finished:'已结束'})[g.phase]:match.kind==='werewolf'?'第 '+g.round+' 轮 · '+({night:'夜间行动',wolf:'狼人行动',seer:'预言家行动',witch:'女巫行动',discuss:'白天讨论',vote:'放逐投票',finished:'已结束'})[g.phase]:chessPhase+' · 第 '+(g.ply||0)+' 手';
+ $('phase').textContent=partyKind(match.kind)?'第 '+g.round+' 轮 · '+ArenaParty.phase(g,match.started):match.kind==='groupchat'?'第 '+g.round+' 轮 · '+({bid:'征集意愿',speak:'成员发言',idle:'等待讨论',finished:'已结束'})[g.phase]:match.kind==='werewolf'?'第 '+g.round+' 轮 · '+({night:'夜间行动',wolf:'狼人行动',seer:'预言家行动',witch:'女巫行动',discuss:'白天讨论',vote:'放逐投票',finished:'已结束'})[g.phase]:chessPhase+' · 第 '+(g.ply||0)+' 手';
  $('live').textContent=historical()?'◷ ARCHIVE':replay===null?'● LIVE':'◷ REPLAY';
  const viewingHistory=historical()||replay!==null;
  $('exportButton').disabled=exporting;
@@ -452,13 +490,16 @@ function render(){
  $('pauseButton').disabled=viewingHistory||!admin||!match.started||finished;$('pauseButton').textContent=match.paused?'继续比赛':'暂停比赛';
  $('endButton').disabled=viewingHistory||!admin||finished;$('shareRoom').disabled=viewingHistory||!admin||finished;
  $('restartButton').disabled=viewingHistory||!admin||!match.started&&!finished;$('restartButton').textContent=match.kind==='groupchat'?'开启新话题':'重新开局';
- $('reveal').disabled=historical()||!!credential();$('replay').disabled=false;$('backLive').disabled=false;
+ $('reveal').disabled=!!credential();$('reveal').title=credential()?'已入座玩家请另开观战页面使用管理员上帝视角':'需要管理码，包含隐藏信息';renderReveal(g);$('replay').disabled=false;$('backLive').disabled=false;
  $('replay').max=Math.max(0,match.history.length-1);$('replay').value=replay===null?Math.max(0,match.history.length-1):replay;
  $('replayLabel').textContent=replay===null?(historical()?'第 '+match.runNumber+' 局终局 · ':'实时 · ')+match.history.length+' 条历史记录':'回放 '+(replay+1)+'/'+match.history.length+' · '+(match.history[replay]?.text||'');
- if(match.kind!=='groupchat'&&$('board').className==='chat-board'){$('board').className='';delete $('board').dataset.chatHtml}
+ if(match.kind!=='groupchat'&&['chat-board','party-board'].includes($('board').className)){$('board').className='';delete $('board').dataset.chatHtml}
  if(match.kind==='groupchat'){
   if(chessStage){chessStage.destroy();chessStage=null}if(ww.room){wwPlayer().reset();ww.room=null}
   renderChatStage(g);
+ }else if(partyKind(match.kind)){
+  if(chessStage){chessStage.destroy();chessStage=null}if(ww.room){wwPlayer().reset();ww.room=null}
+  $('board').className='party-board';setHTML($('board'),ArenaParty.stage(g,stagePeople,{started:match.started,canAct:!!humanJob&&!match.paused&&!viewingHistory}));
  }else if(match.kind!=='werewolf'){
   if(ww.room){wwPlayer().reset();ww.room=null;ww.seen=null;ww.prevPhase=null;ww.poppedId=null}
   const context=chatKey()+':'+replay+':'+g.ply+':'+match.boardRevision+':'+(match.undoRequest?.id||'');
@@ -474,7 +515,6 @@ function render(){
   else if(focusTarget)$('board').querySelector('[data-target="'+focusTarget+'"]')?.focus({preventScroll:true});
  }else{
   if(chessStage){chessStage.destroy();chessStage=null}
-  const warning=$('reveal').checked&&replay===null?'<div class="reveal-warning">管理全知视图 · 包含隐藏身份，勿向选手分享</div>':'';
   const events=replay===null?match.events:match.history.slice(0,replay+1);
   const {speaking,lastSpeech}=ArenaWerewolf.deriveSpeech(events,g);
   const poppedBefore=ww.poppedId;
@@ -490,30 +530,34 @@ function render(){
    }
    if(lastSpeech)ww.poppedId=lastSpeech.id;
   }else wwPlayer().reset();
-  $('board').innerHTML=warning+ArenaWerewolf.stage(g,match.participants,avatarManifest,{speaking,lastSpeech,poppedId:replay===null?poppedBefore:(lastSpeech?.id??null)});
+  $('board').innerHTML=ArenaWerewolf.stage(g,stagePeople,avatarManifest,{speaking,lastSpeech,poppedId:replay===null?poppedBefore:(lastSpeech?.id??null)});
  }
  $('chatAdminTools').hidden=match.kind!=='groupchat'||viewingHistory;if(match.kind==='groupchat'){$('chatAddAI').hidden=!admin;$('chatAddAI').disabled=finished||viewingHistory;$('chatJoin').hidden=!!credential();$('chatJoin').disabled=finished||viewingHistory||(!admin&&!stored('arenaJoin:'+current));$('chatRestart').hidden=!admin;$('chatRestart').disabled=finished||match.paused||!match.started||match.game.phase!=='idle'||match.participants.filter(p=>p.connected).length<2}
- const participants=match.kind==='groupchat'&&replay!==null?g.members:match.participants;
+ const participants=stagePeople;
  $('count').textContent=participants.filter(p=>p.connected).length+(match.kind==='groupchat'?' 位成员':' / '+participants.length);
- $('players').innerHTML=participants.map(p=>{
+ const playerHtml=participants.map(p=>{
   if(match.kind==='groupchat')return chatMemberCard(p,finished,g);
   const d=viewingHistory?null:match.connections?.find(c=>c.seat===p.seat),control=ArenaUI.wakeControl(d,wakeRequests.has(current+':'+p.seat));
   const frame=replay===null?match:match.history[replay],chess=['xiangqi','blind'].includes(match.kind),active=chess&&g.status!=='finished'&&(frame?.started??match.started)&&!frame?.paused&&!frame?.undoRequest&&g.turn===p.seat,confirming=chess&&frame?.undoRequest?.responder===p.seat;
   const tag=active?(replay!==null?'回放行棋方':playerData?.seat===p.seat?'轮到你':'正在行棋'):confirming?'等待确认悔棋':'';
-  return '<div class="player'+(active?' chess-active':'')+(confirming?' chess-confirming':'')+'">'+(p.type==='human'?'<span class="provider-avatar human-avatar">真人</span>':ArenaUI.avatar(p.provider,avatarManifest))+'<div class="player-meta"><strong>'+esc(p.nickname||seatTitle(p.seat))+'</strong>'+(p.nickname?'<small>'+seatTitle(p.seat)+'</small>':'')+(tag?'<span class="seat-turn-tag">'+tag+'</span>':'')+'<small>'+esc(viewingHistory?'历史选手 · 只读记录':connectionText(p))+'</small>'+(d?.error?'<small>'+esc(d.error)+'</small>':'')+'</div>'+(viewingHistory?'':'<div class="participant-actions"><select class="participant-type" data-participant-type="'+p.seat+'" aria-label="'+seatTitle(p.seat)+'类型" '+(!admin||match.started||p.connected||finished?'disabled':'')+'><option value="ai" '+(p.type==='ai'?'selected':'')+'>AI</option><option value="human" '+(p.type==='human'?'selected':'')+'>真人</option></select>'+(control?'<button class="wake-button" data-wake-seat="'+p.seat+'" '+(control.disabled?'disabled':'')+' title="'+esc(control.reason)+'">'+esc(control.label)+'</button>':'')+'<button data-seat="'+p.seat+'" '+((p.connected||p.type==='ai')&&!admin||p.type==='human'&&!p.connected&&!!credential()||finished?'disabled':'')+'>'+(p.connected?'撤销':p.type==='human'?'加入'+(p.seat==='red'?'红方':p.seat==='black'?'黑方':p.seat.slice(1)+' 号席位'):'邀请 AI')+'</button></div>')+'</div>';
- }).join('');
+  return '<div class="player'+(active?' chess-active':'')+(confirming?' chess-confirming':'')+'">'+ArenaPresentation.avatar(p)+'<div class="player-meta"><strong>'+esc(p.nickname||seatTitle(p.seat))+'</strong>'+(p.nickname?'<small>'+seatTitle(p.seat)+'</small>':'')+(tag?'<span class="seat-turn-tag">'+tag+'</span>':'')+'<small>'+esc(viewingHistory?'历史选手 · 只读记录':connectionText(p))+'</small>'+(d?.error?'<small>'+esc(d.error)+'</small>':'')+'</div>'+(viewingHistory?'':'<div class="participant-actions">'+ArenaPresentation.animalSelect(p,!!admin&&!finished&&(!match.started||match.paused))+'<select class="participant-type" data-participant-type="'+p.seat+'" aria-label="'+seatTitle(p.seat)+'类型" '+(!admin||match.started||p.connected||finished?'disabled':'')+'><option value="ai" '+(p.type==='ai'?'selected':'')+'>AI</option><option value="human" '+(p.type==='human'?'selected':'')+'>真人</option></select>'+(control?'<button class="wake-button" data-wake-seat="'+p.seat+'" '+(control.disabled?'disabled':'')+' title="'+esc(control.reason)+'">'+esc(control.label)+'</button>':'')+'<button data-seat="'+p.seat+'" '+((p.connected||p.type==='ai')&&!admin||p.type==='human'&&!p.connected&&!!credential()||finished?'disabled':'')+'>'+(p.connected?'撤销':p.type==='human'?'加入'+(p.seat==='red'?'红方':p.seat==='black'?'黑方':p.seat.slice(1)+' 号席位'):'邀请 AI')+'</button></div>')+'</div>';
+ }).join('');setHTML($('players'),playerHtml);
  $('adminTasks').hidden=!match.admin||viewingHistory;const tasks=match.admin?.tasks||[],pending=tasks.filter(t=>t.status==='pending'),resolved=tasks.filter(t=>t.status!=='pending');
  const taskHtml=t=>'<div class="admin-task"><span>'+esc(t.details||t.message||'系统异常')+'<small>'+esc(({pending:'待处理',retried:'已允许重试',resolved:'已解决',closed:'已关闭'})[t.status])+(t.resolution?' · '+esc(t.resolution):'')+'</small></span>'+(t.canRetry&&!viewingHistory?'<button data-retry-task="'+esc(t.id)+'">允许一次重试</button>':'')+'</div>';
  $('taskList').innerHTML=pending.length?pending.map(taskHtml).join(''):'<p class="muted">暂无待处理异常</p>';
  $('taskCount').textContent=pending.length?'待处理 '+pending.length:'暂无待处理';$('resolvedTasks').hidden=!resolved.length;$('resolvedTaskSummary').textContent='已处理记录（'+resolved.length+'）';$('resolvedTaskList').innerHTML=resolved.slice().reverse().map(taskHtml).join('');renderFolds(pending.length);
  const events=replay===null?match.events:match.history.slice(0,replay+1);
- $('events').innerHTML=events.slice().reverse().map(e=>'<div class="event '+esc(e.type)+'"><time>'+new Date(e.at).toLocaleTimeString('zh-CN',{hour12:false})+'</time><span>'+esc(e.text)+'</span></div>').join('');
- renderPlayerPanel();
+ $('events').innerHTML=events.slice().reverse().map(e=>'<div class="event '+esc(e.type)+'"><time>'+new Date(e.at).toLocaleTimeString('zh-CN',{hour12:false})+'</time><span>'+((e.seat||e.party?.seat)?ArenaPresentation.avatar((e.eventPeople||[]).find(p=>p.seat===(e.seat||e.party?.seat))||{seat:e.seat||e.party?.seat},{size:'tiny'}):'')+esc(e.text)+'</span></div>').join('');
+ renderStatePicker();renderPlayerPanel();
 }
 function renderPlayerPanel(){
  const panel=$('playerControls');panel.hidden=!playerData||replay!==null||historical();
  if(panel.hidden){if(panel.dataset.chatDraftKey)rememberChatDraft();panel.innerHTML='';delete panel.dataset.chatDraftKey;delete panel.dataset.chatSharedKey;panelContext='';return}
  if(match.kind==='groupchat'){renderChatPanel();return}
+ if(partyKind(match.kind)){
+  const key=JSON.stringify([chatKey(),humanJob?.taskId,humanJob?.attemptId,playerData.privateView.self,match.paused,match.started,match.game.status]);
+  if(key!==panelContext){panelContext=key;panel.innerHTML='<div class="turn-clock" id="turnClock"></div>'+ArenaParty.actions(playerData.privateView,humanJob,match.participants,{started:match.started,paused:match.paused})}updateClock();return;
+ }
  const key=JSON.stringify([current,humanJob?.taskId,humanJob?.attemptId,playerData.privateView.self,match.paused,match.started,match.game.status,playerData.interactions?.undo,playerData.interactions?.emoteAvailableAt,match.undoRequest?.id]);
  if(key!==panelContext){
   panelContext=key;
@@ -537,7 +581,7 @@ function openChatProfile(target){
 function chatMemberCard(p,finished,g){
  const live=replay===null&&!historical(),manager=admin&&live,d=live?match.connections?.find(c=>c.seat===p.seat):null,control=ArenaUI.wakeControl(d,wakeRequests.has(current+':'+p.seat));
  const speaker=!finished&&g.phase==='speak'&&g.speaker===p.seat,bidding=!finished&&g.phase==='bid'&&g.roster.includes(p.seat),waiting=bidding&&g.pendingSeats?.includes(p.seat);
- return '<div class="player'+(speaker||waiting?' chess-active':'')+'"><div>'+(p.type==='human'?'<span class="provider-avatar human-avatar">真人</span>':ArenaUI.avatar(p.provider,avatarManifest))+'</div><div class="player-meta"><strong>'+esc(p.nickname||seatTitle(p.seat))+'</strong>'+(speaker?'<span class="seat-turn-tag">等待发言</span>':waiting?'<span class="seat-turn-tag">等待提交意愿</span>':bidding?'<small>'+(g.pendingSeats?'已提交意愿':'本轮征集意愿')+'</small>':'')+'<small>'+esc(live?connectionText(p):'历史成员 · 只读回放')+'</small></div><div class="participant-actions">'+(manager?'<button data-profile-seat="'+p.seat+'" '+(finished?'disabled':'')+'>设定</button>':'')+(control?'<button data-wake-seat="'+p.seat+'" '+(control.disabled?'disabled':'')+'>'+esc(control.label)+'</button>':'')+(!p.connected&&manager?'<button data-seat="'+p.seat+'" '+(finished?'disabled':'')+'>邀请 AI</button>':'')+(manager?'<button data-seat="'+p.seat+'" data-remove-chat="1" '+(finished?'disabled':'')+'>移出</button>':'')+'</div></div>';
+ return '<div class="player'+(speaker||waiting?' chess-active':'')+'"><div>'+ArenaPresentation.avatar(p)+'</div><div class="player-meta"><strong>'+esc(p.nickname||seatTitle(p.seat))+'</strong>'+(speaker?'<span class="seat-turn-tag">等待发言</span>':waiting?'<span class="seat-turn-tag">等待提交意愿</span>':bidding?'<small>'+(g.pendingSeats?'已提交意愿':'本轮征集意愿')+'</small>':'')+'<small>'+esc(live?connectionText(p):'历史成员 · 只读回放')+'</small></div><div class="participant-actions">'+(manager?'<button data-profile-seat="'+p.seat+'" '+(finished?'disabled':'')+'>设定</button>':'')+(control?'<button data-wake-seat="'+p.seat+'" '+(control.disabled?'disabled':'')+'>'+esc(control.label)+'</button>':'')+(!p.connected&&manager?'<button data-seat="'+p.seat+'" '+(finished?'disabled':'')+'>邀请 AI</button>':'')+(manager?'<button data-seat="'+p.seat+'" data-remove-chat="1" '+(finished?'disabled':'')+'>移出</button>':'')+'</div></div>';
 }
 function renderChatStage(g){
  const frame=replay===null?match:match.history[replay],events=replay===null?match.events:match.history.slice(0,replay+1);
@@ -571,6 +615,16 @@ function rememberChatDraft(){
  chatDrafts.set(key,draft);chatDrafts.set(panel.dataset.chatSharedKey||chatKey()+':shared',{chatEmoteTarget:draft.chatEmoteTarget||''});
 }
 $('playerControls').oninput=()=>{if(match?.kind==='groupchat')rememberChatDraft()};
+function renderReveal(g){
+ const on=$('reveal').checked&&!credential();$('revealNotice').hidden=!on;$('revealDetails').hidden=true;$('revealDetails').innerHTML='';if(!on)return;
+ $('revealNotice').textContent=replay!==null?'上帝视角已开启 · 历史回放仍显示当时公开信息；回到实时／本局终局查看秘密。':match.kind==='xiangqi'?'上帝视角 · 中国象棋所有棋子均为公开信息。':'上帝视角 · 仅管理员可见，包含隐藏信息，请勿向选手分享。';
+ if(replay!==null)return;
+ const title=id=>esc(match.participants.find(p=>p.seat===id)?.nickname||seatTitle(id));let html='';
+ if(match.kind==='groupchat'&&g.revealed){html='<h3>成员私有设定与本轮报分</h3>'+g.revealed.profiles.map(p=>'<article><strong>'+title(p.id)+'</strong><p>性格：'+esc(p.profile.personality||'未设置')+'</p><p>初始观点：'+esc(p.profile.initialOpinion||'未设置')+'</p><small>本轮意愿：'+esc(g.revealed.bids[p.id]??'未提交')+'</small></article>').join('')}
+ if(match.kind==='werewolf'&&g.revealed){const r=g.revealed;html='<h3>夜间情报</h3><p>狼刀目标：'+(r.night.target?title(r.night.target):'无')+' · 解药'+(r.potions.save?'可用':'已用')+' · 毒药'+(r.potions.poison?'可用':'已用')+'</p><p>狼人票型：'+esc(Object.entries(r.night.wolfVotes||{}).map(([id,to])=>seatTitle(id)+' → '+(to?seatTitle(to):'弃权')).join('；')||'尚未提交')+'</p>'+Object.entries(r.findings).map(([id,list])=>'<p>'+title(id)+' 的查验：'+esc(list.map(f=>'第 '+f.round+' 夜 '+seatTitle(f.target)+(f.wolf?' 是狼人':' 不是狼人')).join('；')||'无')+'</p>').join('')}
+ if(g.privatePresentation){const p=g.privatePresentation,night=Object.entries(p.night||{}),sealed=Object.values(p.sealed||{}).flatMap(c=>Object.entries(c.states));if(night.length||sealed.length)html+='<h3>封存表情 · 仅管理员可见</h3>'+[...night,...sealed].map(([id,state])=>'<p>'+title(id)+'：'+esc(state)+'</p>').join('')}
+ if(html){$('revealDetails').hidden=false;$('revealDetails').className='omniscient-details';$('revealDetails').innerHTML=html}
+}
 async function chatPlayerAction(event){
  const button=event.target.closest('[data-chat-profile],[data-chat-restart],[data-chat-abstain]');if(!button)return false;
  if(button.disabled||replay!==null||historical())return true;
@@ -586,7 +640,7 @@ function updateClock(){
  if(playerData?.interactions&&match?.started&&!match.paused&&match.game.status!=='finished')for(const button of $('playerControls').querySelectorAll?.('[data-emote]')||[])button.disabled=interactionBusy||playerData.interactions.emoteAvailableAt>Date.now()+clockOffset;
 }
 safe(async()=>{
- [network,avatarManifest]=await Promise.all([api('/api/network'),api('/assets/avatars/manifest.json').catch(()=>({}))]);
+ let presentationManifest;[network,avatarManifest,gameRules,presentationManifest]=await Promise.all([api('/api/network'),api('/assets/avatars/manifest.json').catch(()=>({})),api('/api/rules').catch(()=>({})),api('/assets/presentation/manifest.json').catch(()=>({animals:[],states:[]}))]);ArenaPresentation.configure(presentationManifest);
  $('shareAddress').innerHTML=[...network.lanOrigins,network.localOrigin].map(url=>'<option value="'+esc(url)+'">'+esc(url)+(url===network.localOrigin?'（仅本机）':'')+'</option>').join('');
  $('networkHint').textContent=network.lanOrigins.length?'真人通过房间链接加入；AI 请在选手旁邀请':'未发现局域网地址，请检查网络连接';
  await refresh();

@@ -9,5 +9,6 @@ export function visiblePiece(piece){
  if(!piece)return null;
  if(typeof piece==='string')return {side:piece[0]==='r'?'red':'black',glyph:names[piece]||'?',hidden:false,hint:''};
  const code=(piece.side==='red'?'r':'b')+piece.kind;
+ if(piece.truth)return {side:piece.truth.side,glyph:names[(piece.truth.side==='red'?'r':'b')+piece.truth.kind]||'?',hidden:false,hint:names[code]||'?',omniscient:true};
  return {side:piece.side,glyph:piece.hidden?'暗':names[code]||'?',hidden:!!piece.hidden,hint:piece.hidden?names[code]||'?':''};
 }

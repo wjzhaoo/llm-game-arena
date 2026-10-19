@@ -5,13 +5,15 @@ import vm from 'node:vm';
 
 const read = p => fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 function werewolf(globals = {}) {
- const ctx = {...globals};
+ const ctx = {...globals,document:{addEventListener(){},...globals.document}};
+ vm.runInNewContext(read('public/presentation.js'),ctx);
+ ctx.ArenaPresentation.configure(JSON.parse(read('public/assets/presentation/manifest.json')));
  vm.runInNewContext(read('public/ui.js'), ctx);
  vm.runInNewContext(read('public/werewolf.js'), ctx);
  return ctx.ArenaWerewolf;
 }
 const game = (over = {}) => ({game: 'werewolf', status: 'playing', phase: 'discuss', round: 2, players: ['p1', 'p2', 'p3', 'p4', 'p5', 'p6'].map(id => ({id, alive: id !== 'p4'})), ...over});
-const participants = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6'].map(id => ({seat: id, type: id === 'p3' ? 'human' : 'ai', provider: 'kimi'}));
+const participants = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6'].map(id => ({seat: id, type: id === 'p3' ? 'human' : 'ai', provider: 'kimi',animalId:'cat',state:'无辜'}));
 
 test('seatPosition places p1 at the top and spaces six seats around the table', () => {
  const w = werewolf();
@@ -27,7 +29,7 @@ test('stage renders six seats with dead/speaking state and escapes the speech bu
  assert.equal((html.match(/data-seat="p\d"/g) || []).length, 6);
  assert.ok((html.match(/ww-seat dead/g) || []).length === 1, 'only p4 is dead');
  assert.ok(!html.includes('speaking'));
- assert.ok(html.includes('真人'), 'human seat keeps the human avatar block');
+ assert.equal((html.match(/aria-label="猫 · 无辜"/g)||[]).length,6,'humans and models use the same animal/state avatars');
  const speech = {id: 'e1', seat: 'p2', text: 'p3 是狼 <script>alert(1)</script>'};
  html = w.stage(g, participants, {}, {speaking: 'p2', lastSpeech: speech, poppedId: null});
  assert.ok(html.includes('ww-seat speaking'));

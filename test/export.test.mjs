@@ -1,3 +1,4 @@
+import {submitAction} from './action-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -29,7 +30,7 @@ function players(a,kind,title='导出验收') {
 function submit(a,connection,result) {
  const {job} = a.claim(connection.identity);
  assert.ok(job);
- assert.equal(a.submit(connection.identity,{...job,result}).ok,true);
+ assert.equal(submitAction(a,connection.identity,{...job,result}).ok,true);
 }
 function record(a,id,text) {a.store.change(s=>a.record(a.get(id,s),'notice',text))}
 function saved(root) {
@@ -120,7 +121,7 @@ test('Chess export retains move coordinates, emotes and undo events without dump
  const {a} = fixture(t),{id,connections} = players(a,'xiangqi');a.start(id);
  submit(a,connections[0],{from:[0,6],to:[0,5]});a.emote(connections[0].identity,{emote:'good'});
  a.requestUndo(connections[0].identity,{boardRevision:a.get(id).boardRevision});const job=a.claim(connections[1].identity).job;
- assert.equal(a.submit(connections[1].identity,{...job,result:{type:'undo-response',requestId:a.get(id).undoRequest.id,accept:true}}).ok,true);
+ assert.equal(submitAction(a,connections[1].identity,{...job,result:{type:'undo-response',requestId:a.get(id).undoRequest.id,accept:true}}).ok,true);
  const {content} = a.exportRecords(id);assert.ok(content.includes('从 \\[0,6\\] 到 \\[0,5\\]'));assert.ok(content.includes('好棋'));assert.ok(content.includes('撤回'));assert.ok(content.includes('棋局已从第 1 手回到第 0 手'));
  const blind = players(a,'blind').id;
  a.store.change(s=>{a.get(blind,s).game.board.flat().find(p=>p?.h).privateMarker='PRIVATE-BLIND-IDENTITY'});

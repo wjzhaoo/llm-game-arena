@@ -1,3 +1,4 @@
+import {submitAction} from './action-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -25,18 +26,18 @@ function fixture(t,kind='xiangqi',human=true){
  const connections={red:connect(a,id,'red',human),black:connect(a,id,'black',human)},ids=Object.fromEntries(Object.entries(connections).map(([s,c])=>[s,a.identity(c.token)]));
  t.after(()=>{store.close();removeTemporaryDirectory(root)});a.start(id);return {root,store,clock,a,id,ids,connections};
 }
-function move(f,seat,result){const job=f.a.claim(f.ids[seat]).job;assert.equal(f.a.submit(f.ids[seat],{...job,result}).ok,true);return {...job,result}}
+function move(f,seat,result){const job=f.a.claim(f.ids[seat]).job;assert.equal(submitAction(f.a,f.ids[seat],{...job,result}).ok,true);return {...job,result}}
 function request(f,seat='red'){return f.a.requestUndo(f.ids[seat],{boardRevision:f.a.get(f.id).boardRevision}).undoRequest}
-function answer(f,accept=true){const r=f.a.get(f.id).undoRequest,j=f.a.claim(f.ids[r.responder]).job;assert.equal(j.kind,'undo-response');const submission={...j,result:{type:'undo-response',requestId:r.id,accept}};assert.equal(f.a.submit(f.ids[r.responder],submission).ok,true);return submission}
+function answer(f,accept=true){const r=f.a.get(f.id).undoRequest,j=f.a.claim(f.ids[r.responder]).job;assert.equal(j.kind,'undo-response');const submission={...j,result:{type:'undo-response',requestId:r.id,accept}};assert.equal(submitAction(f.a,f.ids[r.responder],submission).ok,true);return submission}
 
 test('Accepted one-ply undo restores exact rules, original remaining time, fresh task and durable receipts',t=>{
  const f=fixture(t);f.clock.now+=2000;const original=move(f,'red',{from:[0,6],to:[0,5]}),old=f.a.claim(f.ids.black).job;
  f.clock.now+=1000;const r=request(f);assert.equal(r.plies,1);assert.equal(f.a.claim(f.ids.red).job,null);
- assert.throws(()=>f.a.submit(f.ids.black,{...old,result:{from:[0,3],to:[0,4]}}),/active/);
+ assert.throws(()=>submitAction(f.a,f.ids.black,{...old,result:{from:[0,3],to:[0,4]}}),/active/);
  f.clock.now+=500;const approval=answer(f);assert.deepEqual(f.a.get(f.id).game,initialXiangqi());
  const fresh=f.a.claim(f.ids.red).job;assert.equal(fresh.deadline,f.clock.now+8000);assert.notEqual(fresh.attemptId,original.attemptId);assert.equal(f.a.get(f.id).boardRevision,2);
- assert.equal(f.a.submit(f.ids.red,original).duplicate,true);assert.equal(f.a.get(f.id).game.ply,0);
- assert.equal(f.a.submit(f.ids.black,approval).duplicate,true);
+ assert.equal(submitAction(f.a,f.ids.red,original).duplicate,true);assert.equal(f.a.get(f.id).game.ply,0);
+ assert.equal(submitAction(f.a,f.ids.black,approval).duplicate,true);
  assert.equal(f.a.get(f.id).history.filter(e=>e.type==='action').length,1);assert.ok(f.a.get(f.id).history.some(e=>e.type==='undo-accepted'&&e.game.ply===0));
  const publicText=JSON.stringify(f.a.public(f.a.get(f.id)));for(const secret of ['undoStack','remainingMs','repetitions','tokenHash'])assert.ok(!publicText.includes('"'+secret+'"'));
 });
@@ -49,9 +50,9 @@ test('Two-ply undo returns to requester, preserves captures and last move of the
 
 test('Rejection, invalid confirmation and timeout preserve frozen move budget and block repeated requests',t=>{
  const f=fixture(t,'xiangqi',false);move(f,'red',{from:[0,6],to:[0,5]});const old=f.a.claim(f.ids.black).job;
- f.a.submit(f.ids.black,{...old,result:{from:[0,3],to:[0,7]}});assert.equal(f.a.get(f.id).jobs.at(-1).invalid,1);
+ submitAction(f.a,f.ids.black,{...old,result:{from:[0,3],to:[0,7]}});assert.equal(f.a.get(f.id).jobs.at(-1).invalid,1);
  f.clock.now+=2000;const before=structuredClone(f.a.get(f.id).game);request(f);f.clock.now+=3000;
- const approval=f.a.claim(f.ids.black).job;assert.equal(f.a.submit(f.ids.black,{...approval,result:{from:[0,3],to:[0,4]}}).ok,false);
+ const approval=f.a.claim(f.ids.black).job;assert.equal(submitAction(f.a,f.ids.black,{...approval,result:{from:[0,3],to:[0,4]}}).ok,false);
  answer(f,false);assert.deepEqual(f.a.get(f.id).game,before);const fresh=f.a.claim(f.ids.black).job;assert.equal(fresh.deadline,f.clock.now+8000);assert.equal(f.a.get(f.id).jobs.at(-1).invalid,1);
  assert.throws(()=>request(f),/申请过/);
  move(f,'black',{from:[0,3],to:[0,4]});request(f);const r=f.a.get(f.id).undoRequest;f.clock.now=r.deadline+1;f.a.tick();
@@ -68,7 +69,7 @@ test('Capture rollback restores the previous active line and publishes a separat
 
 test('Two invalid AI confirmations reject undo, close decision faults and cannot forfeit the chess game',t=>{
  const f=fixture(t,'xiangqi',false);move(f,'red',{from:[0,6],to:[0,5]});f.clock.now+=2000;request(f);const decision=f.a.claim(f.ids.black).job;
- for(const result of [{accept:'yes'},{accept:'no'}])assert.equal(f.a.submit(f.ids.black,{...decision,result}).ok,false);
+ for(const result of [{accept:'yes'},{accept:'no'}])assert.equal(submitAction(f.a,f.ids.black,{...decision,result}).ok,false);
  const m=f.a.get(f.id);assert.equal(m.undoRequest,undefined);assert.equal(m.game.status,'playing');assert.equal(m.jobs.at(-1).deadline,f.clock.now+8000);
  assert.equal(m.adminTasks.filter(t=>t.status==='pending').length,0);assert.equal(f.a.claim(f.ids.black).job.kind,'move');
 });
@@ -84,9 +85,9 @@ test('Pause, process restart and revocation preserve confirmation and frozen clo
 test('Stale revision, overlapping requests, unauthorized confirmation and resign during confirmation are safe',t=>{
  const f=fixture(t);assert.throws(()=>request(f),/暂无/);move(f,'red',{from:[0,6],to:[0,5]});
  assert.throws(()=>f.a.requestUndo(f.ids.red,{boardRevision:0}),/更新/);request(f);assert.throws(()=>request(f),/等待/);
- const j=f.a.claim(f.ids.black).job;assert.throws(()=>f.a.submit(f.ids.red,{...j,result:{type:'undo-response',requestId:f.a.get(f.id).undoRequest.id,accept:true}}),/foreign/);
+ const j=f.a.claim(f.ids.black).job;assert.throws(()=>submitAction(f.a,f.ids.red,{...j,result:{type:'undo-response',requestId:f.a.get(f.id).undoRequest.id,accept:true}}),/foreign/);
  f.a.resign(f.ids.red);assert.equal(f.a.get(f.id).game.reason,'resigned');assert.equal(f.a.get(f.id).game.winner,'black');assert.equal(f.a.get(f.id).undoRequest,undefined);assert.equal(f.a.get(f.id).jobs.filter(j=>j.status==='open').length,0);
- assert.throws(()=>f.a.submit(f.ids.black,{...j,result:{type:'undo-response',requestId:'old',accept:true}}),/active/);
+ assert.throws(()=>submitAction(f.a,f.ids.black,{...j,result:{type:'undo-response',requestId:'old',accept:true}}),/active/);
 });
 
 test('Blind undo refuses reveals and covered captures but restores ordinary open-piece moves',t=>{
@@ -115,7 +116,7 @@ test('Legacy running chess migration preserves identity and deadlines but has no
  f.store.change(s=>{const m=s.matches[f.id];delete m.chessInteractionPolicy;delete m.boardRevision;delete m.undoStack;delete m.undoRequested;delete m.lastEmoteAt;m.jobs[0].phase='ply:0';delete m.jobs[0].kind});
  f.store.close();const restored=new Store(f.root);t.after(()=>restored.close());const a=new Arena(restored,{now:()=>f.clock.now});
  assert.equal(a.claim(f.ids.red).job.attemptId,original.attemptId);assert.equal(a.claim(f.ids.red).job.deadline,original.deadline);assert.equal(restored.state.matches[f.id].undoStack.length,0);
- assert.equal(a.submit(f.ids.red,{...original,result:{from:[0,6],to:[0,5]}}).ok,true);assert.equal(a.interactions(a.get(f.id),'red').undo.allowed,true);
+ assert.equal(submitAction(a,f.ids.red,{...original,result:{from:[0,6],to:[0,5]}}).ok,true);assert.equal(a.interactions(a.get(f.id),'red').undo.allowed,true);
 });
 
 test('3D coordinate conversion matches every public square and hides covered identities',()=>{
@@ -135,9 +136,9 @@ test('HTTP and actual AI CLI support emote, undo confirmation and resignation wi
  assert.equal((await post('/desktop',black.token,{action:'resign'})).status,401);assert.equal((await post('/api/player',red.token,{action:'emote',emote:'good'})).status,401);assert.equal((await post('/desktop','',{action:'resign'})).status,401);
  const credential=path.join(root,'red.credential.json');fs.writeFileSync(credential,JSON.stringify({...red,url:app.origin}));const run=promisify(execFile);
  const cli=async(...args)=>JSON.parse((await run(process.execPath,['client.mjs',...args,'--credential',credential])).stdout);
- assert.equal((await cli('emote','--emote','good')).ok,true);const job=(await cli('claim')).job,identity=app.arena.identity(red.token);app.arena.submit(identity,{...job,result:{from:[0,6],to:[0,5]}});
+ assert.equal((await cli('emote','--emote','good')).ok,true);const job=(await cli('claim')).job,identity=app.arena.identity(red.token);submitAction(app.arena,identity,{...job,result:{from:[0,6],to:[0,5]}});
  assert.equal((await cli('undo-request','--revision','1')).ok,true);const human=app.arena.identity(black.token),confirmation=app.arena.claim(human).job;
- const r=await post('/api/player',black.token,{action:'submit',...confirmation,result:{type:'undo-response',requestId:app.arena.get(id).undoRequest.id,accept:true}});assert.equal((await r.json()).ok,true);
+ const r=await post('/api/player',black.token,{action:'submit',...confirmation,result:{type:'undo-response',requestId:app.arena.get(id).undoRequest.id,accept:true,state:'平静'}});assert.equal((await r.json()).ok,true);
  assert.equal((await cli('resign')).completed,true);assert.equal(app.arena.get(id).game.winner,'black');
  for(const asset of ['chess-ui.js','chess3d.mjs','chess.css','vendor/three/three.module.js','vendor/three/OrbitControls.js']){const response=await fetch(app.origin+'/'+asset);assert.equal(response.status,200);assert.ok(response.headers.get('content-security-policy').includes("script-src 'self'"))}
  assert.equal((await fetch(app.origin+'/vendor/three/LICENSE.txt')).status,404);

@@ -41,6 +41,7 @@ async function browser({saved='',validToken='fixture-admin',legacy=[],href='http
    return {ok:status===200,status,json:async()=>data};
   }
  });
+ vm.runInContext(fs.readFileSync(new URL('../public/presentation.js',import.meta.url),'utf8'),ctx);
  vm.runInContext(fs.readFileSync(new URL('../public/ui.js',import.meta.url),'utf8'),ctx);
  vm.runInContext(fs.readFileSync(new URL('../public/app.js',import.meta.url),'utf8'),ctx);
  await new Promise(resolve=>setImmediate(resolve));

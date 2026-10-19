@@ -1,3 +1,4 @@
+import {submitAction} from './action-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -117,13 +118,13 @@ test('Wake is sent once to the pending participant; delivery is separate from cl
  const {job} = await f.wake.resume(ids.red);
  assert.equal(job.seat, 'red');
  assert.equal(f.arena.get(id).bindings.red.armed, false);
- f.arena.submit(ids.red, {...job, result: {from: [0, 6], to: [0, 5]}});
+ submitAction(f.arena,ids.red, {...job, result: {from: [0, 6], to: [0, 5]}});
  assert.equal((await f.wake.resume(ids.red)).parked, true);
  await f.tick();
  assert.equal(f.adapter.calls.length, 2);
  assert.equal(f.adapter.calls[1].binding.session, 'session-black');
  const {job: blackJob} = await f.wake.resume(ids.black);
- assert.throws(() => f.arena.submit(ids.red, {...blackJob, result: {from: [0, 3], to: [0, 4]}}), /foreign session/);
+ assert.throws(() => submitAction(f.arena,ids.red, {...blackJob, result: {from: [0, 3], to: [0, 4]}}), /foreign session/);
 });
 
 test('Busy/unknown hosts stay pending and retry only when idle; a definite busy rejection is safe to retry', async t => {
@@ -233,7 +234,7 @@ test('Local invitation uses the installed absolute client from another model wor
  assert.ok(adapter.calls[0].prompt.includes(`node "${script}" resume`));assert.ok(adapter.calls[0].prompt.includes(`node "${script}" submit`));
  assert.ok(!adapter.calls[0].prompt.includes(path.join(modelWorkspace,'client.mjs')));
  const {job}=JSON.parse((await cli(process.execPath,[script,'resume','--credential',credential],{cwd:root})).stdout);
- const response=path.join(modelWorkspace,'tmp','response.json');fs.writeFileSync(response,JSON.stringify({from:[0,6],to:[0,5]}),'utf8');
+ const response=path.join(modelWorkspace,'tmp','response.json');fs.writeFileSync(response,JSON.stringify({from:[0,6],to:[0,5],state:'平静'}),'utf8');
  const submitted=JSON.parse((await cli(process.execPath,[script,'submit','--credential',credential,'--task',job.taskId,'--attempt',job.attemptId,'--file',response],{cwd:root})).stdout);
  assert.equal(submitted.ok,true);assert.equal(app.arena.get(id).game.ply,1);
 });
@@ -262,7 +263,7 @@ test('HTTP and actual CLI wake flow return parked promptly and protect managemen
  assert.ok(Date.now() - start < 3000, 'wake resume must not enter the 60-second wait loop');
  app.arena.start(id); await Promise.all(app.wake.tick());
  const {job} = JSON.parse((await cli(process.execPath, ['client.mjs', 'resume', '--credential', files.red])).stdout);
- fs.writeFileSync(path.join(root, 'response.json'), JSON.stringify({from: [0, 6], to: [0, 5]}), 'utf8');
+ fs.writeFileSync(path.join(root, 'response.json'), JSON.stringify({from:[0,6],to:[0,5],state:'平静'}), 'utf8');
  const submitted = await cli(process.execPath, ['client.mjs', 'submit', '--credential', files.red, '--task', job.taskId, '--attempt', job.attemptId, '--file', path.join(root, 'response.json')]);
  assert.equal(JSON.parse(submitted.stdout).receiptPersisted, true);
  assert.equal(JSON.parse((await cli(process.execPath, ['client.mjs', 'resume', '--credential', files.red])).stdout).parked, true);

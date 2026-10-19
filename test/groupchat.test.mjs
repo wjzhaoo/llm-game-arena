@@ -1,3 +1,4 @@
+import {submitAction} from './action-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -16,7 +17,7 @@ const options={now:10000,timeoutMs:10000,pick:()=>0};
 function engine(count=3){const g=initialGroupchat({topic:'怎样建设月球城市？'});for(let i=0;i<count;i++){const p=addChatMember(g,{type:'ai',profile:{personality:'秘密性格'+i,initialOpinion:'秘密观点'+i}});p.connected=true}beginChatRound(g,options);return g}
 function fixture(t){const root=temporaryDirectory('arena-chat-'),store=new Store(root),clock={now:10000},a=new Arena(store,{now:()=>clock.now,chatPick:()=>0});t.after(()=>{store.close();removeTemporaryDirectory(root)});return {root,store,clock,a}}
 function addAI(a,id,nickname='AI',profile){const {seat}=a.chatMembers(id,{action:'add-ai',nickname,profile}),inv=a.invite(id,seat,'http://127.0.0.1:4318'),c=a.connect({match:id,seat,provider:'simulated',session:'chat-'+seat,invitation:inv.text.match(/--invitation ([a-f0-9]+)/)[1]});return a.identity(c.token)}
-function submit(a,identity,result){const {job}=a.claim(identity);assert.ok(job);return a.submit(identity,{...job,result})}
+function submit(a,identity,result){const {job}=a.claim(identity);assert.ok(job);return submitAction(a,identity,{...job,result})}
 
 test('Groupchat strict bidding, private ballots, random tied winners and consecutive speakers',()=>{
  const g=engine();
@@ -63,16 +64,16 @@ test('Arena groupchat dynamic joins, independent emotes, profile privacy, invali
  a.chatMembers(id,{action:'add-ai',nickname:'尚未接入'});a.start(id);
  const job=a.claim(first).job,originalDeadline=job.deadline;
  a.profile(first,{profile:{personality:'NEXT-PRIVATE'}});assert.equal(a.claim(first).job.view.self.profile.personality,'PRIVATE-PERSONALITY');
- assert.ok(!JSON.stringify(a.public(a.get(id),true)).includes('PRIVATE'));assert.ok(JSON.stringify(a.adminView(id)).includes('NEXT-PRIVATE'));
+ assert.ok(!JSON.stringify(a.public(a.get(id))).includes('PRIVATE'));assert.ok(JSON.stringify(a.public(a.get(id),true).game.revealed).includes('NEXT-PRIVATE'));assert.ok(JSON.stringify(a.adminView(id)).includes('NEXT-PRIVATE'));
  assert.equal(a.claim(second).job.view.self.profile.personality,'');
  a.emote(second,{emote:'provoke',targetSeat:first.seat});assert.equal(a.claim(first).job.deadline,originalDeadline);assert.equal(a.get(id).game.round,1);
  assert.throws(()=>a.emote(second,{emote:'mock'}),/过快/);clock.now+=1500;assert.throws(()=>a.emote(second,{emote:'mock',targetSeat:'p999'}),/目标/);
- const result={type:'bid',score:91};assert.equal(a.submit(first,{...job,result}).ok,true);assert.equal(a.submit(first,{...job,result}).duplicate,true);
+ const result={type:'bid',score:91};assert.equal(submitAction(a,first,{...job,result}).ok,true);assert.equal(submitAction(a,first,{...job,result}).duplicate,true);
  assert.equal(a.get(id).game.lastSelection,null);submit(a,second,{type:'bid',score:10});
  const speech=a.claim(first).job,action={type:'speak',text:'先建设研究站',emote:{id:'encourage'}};
- assert.equal(a.submit(first,{...speech,result:action}).ok,true);assert.equal(a.submit(first,{...speech,result:action}).duplicate,true);
+ assert.equal(submitAction(a,first,{...speech,result:action}).ok,true);assert.equal(submitAction(a,first,{...speech,result:action}).duplicate,true);
  assert.equal(a.get(id).game.messages.filter(m=>m.type==='speak').length,1);assert.equal(a.claim(first).job.view.self.profile.personality,'NEXT-PRIVATE');
- const old=a.claim(first).job;a.revoke(id,first.seat);assert.throws(()=>a.submit(first,{...old,result:{type:'bid',score:100}}),/revoked/);
+ const old=a.claim(first).job;a.revoke(id,first.seat);assert.throws(()=>submitAction(a,first,{...old,result:{type:'bid',score:100}}),/revoked/);
  assert.equal(a.get(id).jobs.filter(j=>j.status==='open').length,0);
  const late=addAI(a,id,'新成员');assert.equal(a.get(id).game.phase,'bid');assert.ok(a.get(id).game.roster.includes(late.seat));
  assert.ok(!JSON.stringify(a.public(a.get(id))).includes('PRIVATE'));
@@ -86,11 +87,11 @@ test('Arena groupchat simultaneous human allocation, idle restart, timeout, paus
  for(const me of ids)submit(a,me,{type:'bid',score:0});assert.equal(a.get(id).game.phase,'idle');
  assert.equal(a.get(id).jobs.some(j=>j.status==='open'),false);a.restartChat(id,ids[1]);const round=a.get(id).game.round;
  assert.equal(a.restartChat(id,ids[1]).duplicate,true);assert.equal(a.get(id).game.round,round);
- const invalid=a.claim(ids[0]).job;assert.equal(a.submit(ids[0],{...invalid,result:{type:'bid',score:101}}).ok,false);assert.equal(a.get(id).jobs.find(j=>j.taskId===invalid.taskId).invalid,0);
+ const invalid=a.claim(ids[0]).job;assert.equal(submitAction(a,ids[0],{...invalid,result:{type:'bid',score:101}}).ok,false);assert.equal(a.get(id).jobs.find(j=>j.taskId===invalid.taskId).invalid,0);
  clock.now+=10001;a.tick();assert.equal(a.get(id).game.phase,'idle');
  a.restartChat(id,ids[0]);for(const me of ids)submit(a,me,{type:'bid',score:me===ids[0]?100:0});
  const winner=a.get(id).game.speaker,deadline=a.get(id).game.phaseDeadline;store.close();
- const restored=new Store(root);try{const b=new Arena(restored,{now:()=>clock.now});assert.equal(b.get(id).game.speaker,winner);assert.equal(b.get(id).game.phaseDeadline,deadline);assert.equal('boardRevision' in b.get(id),false);assert.ok(!JSON.stringify(b.public(b.get(id),true)).includes('个人秘密'));b.end(id);assert.equal(b.get(id).game.phase,'finished');assert.equal(b.claim(ids[0]).completed,true);assert.ok(!JSON.stringify(b.public(b.get(id))).includes('平局'))}finally{restored.close()}
+ const restored=new Store(root);try{const b=new Arena(restored,{now:()=>clock.now});assert.equal(b.get(id).game.speaker,winner);assert.equal(b.get(id).game.phaseDeadline,deadline);assert.equal('boardRevision' in b.get(id),false);assert.ok(!JSON.stringify(b.public(b.get(id))).includes('个人秘密'));assert.ok(JSON.stringify(b.public(b.get(id),true).game.revealed).includes('个人秘密'));b.end(id);assert.equal(b.get(id).game.phase,'finished');assert.equal(b.claim(ids[0]).completed,true);assert.ok(!JSON.stringify(b.public(b.get(id))).includes('平局'))}finally{restored.close()}
 });
 test('Groupchat removed highest bidder loses eligibility, late joins wait, and paused removal keeps frozen time',t=>{
  const {a,clock}=fixture(t),id=a.create({kind:'groupchat',topic:'动态成员',timeoutSeconds:10}).id;
@@ -102,7 +103,7 @@ test('Groupchat removed highest bidder loses eligibility, late joins wait, and p
  a.pause(id);clock.now+=7000;a.revoke(id,ids[2].seat);assert.equal(a.get(id).game.phase,'bid');assert.equal(a.get(id).jobs.some(j=>j.status==='open'),false);
  clock.now+=3000;a.resume(id);const job=a.claim(ids[1]).job;assert.equal(job.deadline-clock.now,10000);assert.ok(a.get(id).game.roster.includes(late.seat));
  const before=a.get(id).game.round;a.claim(late);submit(a,ids[1],{type:'bid',score:2});submit(a,ids[3],{type:'bid',score:0});
- const bad=a.claim(late).job;a.submit(late,{...bad,result:{type:'bid',score:101}});a.submit(late,{...bad,result:{type:'bid',score:-1}});
+ const bad=a.claim(late).job;submitAction(a,late,{...bad,result:{type:'bid',score:101}});submitAction(a,late,{...bad,result:{type:'bid',score:-1}});
  assert.equal(a.get(id).game.round,before);assert.equal(a.get(id).game.phase,'speak');assert.equal(a.get(id).game.speaker,ids[1].seat);
  const oldFrame=a.get(id).history.find(h=>h.type==='started').game;assert.ok(!oldFrame.members.some(p=>p.seat===late.seat));assert.equal('messages' in oldFrame,false);
 });
@@ -141,6 +142,6 @@ for(const transport of ['local','relay'])test('Groupchat '+transport+' wakes bid
  const deliver=async()=>{if(worker)await worker.step();else await Promise.all(wake.tick())};
  a.start(id);await deliver();await deliver();assert.equal(calls.length,1);
  assert.ok(!calls[0].includes('WAKE-PRIVATE'));const bid=a.claim(identity).job;assert.equal(bid.kind,'chat-bid');assert.equal(bid.view.self.profile.personality,'WAKE-PRIVATE');assert.equal(bid.interactions.emotes.length,9);
- a.submit(identity,{...bid,result:{type:'bid',score:100}});a.park(identity);submit(a,human,{type:'bid',score:0});await deliver();assert.equal(calls.length,2);
+ submitAction(a,identity,{...bid,result:{type:'bid',score:100}});a.park(identity);submit(a,human,{type:'bid',score:0});await deliver();assert.equal(calls.length,2);
  assert.equal(a.claim(identity).job.kind,'chat-speak');a.end(id);assert.equal(a.claim(identity).completed,true);
 });

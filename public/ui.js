@@ -28,8 +28,9 @@
     if(!Object.hasOwn(names,p))continue;
     const red=p[0]==='r';pieces+=pieceButton({red,glyph:names[p],xy,active,flipped,label:(red?'红方':'黑方')+' '+names[p]+'，坐标 '+xy+'，查看合法着法'});
    }else{
-    const red=p.side==='red',glyph=blindNames[p.side]?.[p.kind]||'?';
-    pieces+=pieceButton({red,glyph:p.hidden?'暗':glyph,xy,active,flipped,covered:!!p.hidden,coverGlyph:glyph,label:(red?'红方':'黑方')+(p.hidden?'暗棋，按'+glyph+'走法，走第一步后揭开':' '+glyph)+'，坐标 '+xy});
+    const red=(p.truth?.side||p.side)==='red',glyph=blindNames[p.truth?.side||p.side]?.[p.truth?.kind||p.kind]||'?';
+    const cover=blindNames[p.side]?.[p.kind]||'?';
+    pieces+=pieceButton({red,glyph:p.hidden&&!p.truth?'暗':glyph,xy,active,flipped,covered:!!p.hidden,coverGlyph:p.truth?'按'+cover:glyph,label:(p.truth?'全知真身：'+(red?'红方':'黑方')+glyph+'；暗子当前按'+cover+'走法':(red?'红方':'黑方')+(p.hidden?'暗棋，按'+glyph+'走法，走第一步后揭开':' '+glyph))+'，坐标 '+xy});
    }
   }
   for(const move of legal){

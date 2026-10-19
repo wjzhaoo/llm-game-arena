@@ -1,3 +1,4 @@
+import {submitAction} from './action-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -26,7 +27,7 @@ function connectAll(a,id){
   return {token:c.token,identity:a.identity(c.token)};
  });
 }
-function submit(a,identity,result){const {job}=a.claim(identity);assert.ok(job);return a.submit(identity,{...job,result})}
+function submit(a,identity,result){const {job}=a.claim(identity);assert.ok(job);return submitAction(a,identity,{...job,result})}
 function legacy(t,{all=false,oldPolicies=false}={}){
  const source=fixture(t),tokens=[];
  for(const kind of all?kinds:['xiangqi']){

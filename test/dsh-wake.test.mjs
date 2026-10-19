@@ -285,7 +285,7 @@ for (const transport of ['local', 'relay']) test('DSH real Node client ' + trans
  const job = JSON.parse((await run(process.execPath, [script, 'resume', '--credential', credential], {cwd: f.root, env})).stdout).job;
  assert.equal(job.seat, 'red');
  const response = path.join(f.root, 'tmp', 'response.json');
- fs.writeFileSync(response, JSON.stringify({from: [0,6], to: [0,5]}));
+ fs.writeFileSync(response, JSON.stringify({from:[0,6],to:[0,5],state:'平静'}));
  const result = await run(process.execPath, [script, 'submit', '--credential', credential, '--task', job.taskId, '--attempt', job.attemptId, '--file', response], {cwd: f.root, env});
  assert.equal(JSON.parse(result.stdout).ok, true);
  assert.equal(app.arena.get(id).game.ply, 1);

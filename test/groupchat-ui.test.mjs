@@ -14,18 +14,18 @@ test('Groupchat public stage escapes content, shows closed ballots and never ren
  g.status='finished';assert.ok(u.stage(groupchatView(g)).includes('聊天已结束'));assert.ok(!u.stage(groupchatView(g)).includes('平局'));
 });
 
-test('waiting members update after each bid and messages use the same neutral avatar',()=>{
+test('sealed bids hide submission identities and message avatars remain neutral',()=>{
  const u=ui(),g=game();
- assert.ok(u.stage(groupchatView(g),{started:true}).includes('等待 甲、乙 提交意愿'));
+ assert.ok(u.stage(groupchatView(g),{started:true}).includes('等待成员提交意愿'));
  applyGroupchat(g,'p1',{type:'bid',score:90},{now:100,timeoutMs:10000});
  const snapshot=groupchatView(g,null,{snapshot:true});
- assert.deepEqual(snapshot.pendingSeats,['p2']);
+ assert.equal(snapshot.pendingSeats,undefined);
  const html=u.stage(groupchatView(g),{started:true});
- assert.ok(html.includes('等待 乙 提交意愿'));assert.ok(!html.includes('等待 甲、乙'));
- assert.ok(u.actions(groupchatView(g,'p1'),null,{emotes:CHAT_EMOTES,emoteAvailableAt:0},{started:true}).includes('意愿已提交 · 等待 乙 提交意愿'));
+ assert.ok(html.includes('等待成员提交意愿'));assert.ok(!html.includes('等待 甲、乙'));
+ assert.ok(u.actions(groupchatView(g,'p1'),null,{emotes:CHAT_EMOTES,emoteAvailableAt:0},{started:true}).includes('意愿已提交 · 等待成员提交意愿'));
  applyGroupchat(g,'p2',{type:'bid',score:0},{now:100,timeoutMs:10000});
  assert.ok(u.stage(groupchatView(g),{started:true}).includes('等待 甲 发言'));
- assert.deepEqual(snapshot.pendingSeats,['p2'],'history keeps its own pending members');
+ assert.equal(snapshot.pendingSeats,undefined,'history does not retain sealed submission identities');
  const message={type:'speak',text:'你好',at:'2026-10-18T00:00:00Z',sender:{seat:'p1',nickname:'甲',type:'human'}};
  const human=u.message(message,{}),ai=u.message({...message,sender:{...message.sender,type:'ai',provider:'opencode'}},{});
  assert.equal(human,ai);assert.ok(!human.includes('真人'));assert.ok(!ai.includes('opencode'));
@@ -47,7 +47,7 @@ test('Groupchat controller replay uses historical membership and exposes no live
   location:{href:'http://127.0.0.1:4318/',origin:'http://127.0.0.1:4318'},history:{replaceState(){}},navigator:{},
   sessionStorage:{length:0},ArenaTheme:{preference:'system'},document:{getElementById:element,querySelectorAll:()=>[],addEventListener(){}},
   fetch:async route=>({ok:true,json:async()=>route==='/api/network'?{localOrigin:'http://127.0.0.1:4318',lanOrigins:[]}:route==='/api/matches'?[]:{}})});
- for(const file of ['ui.js','groupchat.js','app.js'])vm.runInContext(fs.readFileSync(new URL('../public/'+file,import.meta.url),'utf8'),ctx);
+ for(const file of ['presentation.js','ui.js','groupchat.js','app.js'])vm.runInContext(fs.readFileSync(new URL('../public/'+file,import.meta.url),'utf8'),ctx);
  await new Promise(resolve=>setImmediate(resolve));
  const g=game(),past=groupchatView(g,null,{snapshot:true});const late=addChatMember(g,{type:'human',nickname:'后来加入的人'});late.connected=true;
  const current=groupchatView(g),room={id:'chat',kind:'groupchat',title:'回放',started:true,paused:false,game:current,participants:current.members,events:[],history:[{game:past,started:true,paused:false,text:'早期'}],connections:[],admin:{tasks:[]}};
@@ -55,8 +55,8 @@ test('Groupchat controller replay uses historical membership and exposes no live
  assert.ok(!element('players').innerHTML.includes('后来加入的人'));assert.ok(!element('players').innerHTML.includes('data-profile-seat'));assert.ok(element('players').innerHTML.includes('只读回放'));assert.equal(element('count').textContent,'2 位成员');assert.equal(element('chatAdminTools').hidden,true);
  applyGroupchat(g,'p1',{type:'bid',score:99},{now:100,timeoutMs:10000});room.game=groupchatView(g);
  vm.runInContext('replay=null;render()',ctx);
- assert.ok(element('players').innerHTML.includes('甲</strong><small>已提交意愿</small>'));
- assert.ok(element('players').innerHTML.includes('乙</strong><span class="seat-turn-tag">等待提交意愿</span>'));
+ assert.ok(element('players').innerHTML.includes('甲</strong><small>本轮征集意愿</small>'));
+ assert.ok(element('players').innerHTML.includes('乙</strong><small>本轮征集意愿</small>'));
  assert.ok(!element('players').innerHTML.includes('后来加入的人</strong><span class="seat-turn-tag">等待提交意愿'));
  assert.ok(!element('board').innerHTML.includes('99'),'unsettled scores remain hidden');
 });

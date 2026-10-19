@@ -1,0 +1,205 @@
+{
+  "version": 1,
+  "grid": {
+    "rows": 4,
+    "columns": 4,
+    "cellSize": 256
+  },
+  "animals": [
+    {
+      "id": "cat",
+      "label": "猫",
+      "src": "/assets/presentation/animals/cat.webp"
+    },
+    {
+      "id": "shiba",
+      "label": "柴犬",
+      "src": "/assets/presentation/animals/shiba.webp"
+    },
+    {
+      "id": "fox",
+      "label": "狐狸",
+      "src": "/assets/presentation/animals/fox.webp"
+    },
+    {
+      "id": "rabbit",
+      "label": "兔子",
+      "src": "/assets/presentation/animals/rabbit.webp"
+    },
+    {
+      "id": "panda",
+      "label": "熊猫",
+      "src": "/assets/presentation/animals/panda.webp"
+    },
+    {
+      "id": "bear",
+      "label": "棕熊",
+      "src": "/assets/presentation/animals/bear.webp"
+    },
+    {
+      "id": "raccoon",
+      "label": "浣熊",
+      "src": "/assets/presentation/animals/raccoon.webp"
+    },
+    {
+      "id": "otter",
+      "label": "水獭",
+      "src": "/assets/presentation/animals/otter.webp"
+    },
+    {
+      "id": "owl",
+      "label": "猫头鹰",
+      "src": "/assets/presentation/animals/owl.webp"
+    },
+    {
+      "id": "penguin",
+      "label": "企鹅",
+      "src": "/assets/presentation/animals/penguin.webp"
+    },
+    {
+      "id": "sheep",
+      "label": "绵羊",
+      "src": "/assets/presentation/animals/sheep.webp"
+    },
+    {
+      "id": "capybara",
+      "label": "水豚",
+      "src": "/assets/presentation/animals/capybara.webp"
+    }
+  ],
+  "states": [
+    {
+      "id": "平静",
+      "label": "平静",
+      "description": "眉眼舒展，嘴角放松，姿态从容。",
+      "row": 0,
+      "column": 0
+    },
+    {
+      "id": "老实",
+      "label": "老实",
+      "description": "睁大眼睛，端正坐好，爪子规矩地放在胸前。",
+      "row": 0,
+      "column": 1
+    },
+    {
+      "id": "真诚",
+      "label": "真诚",
+      "description": "目光柔和，身体微微前倾，双爪合拢。",
+      "row": 0,
+      "column": 2
+    },
+    {
+      "id": "无辜",
+      "label": "无辜",
+      "description": "圆眼睛眨巴，嘴巴小小张开，一副不知情的样子。",
+      "row": 0,
+      "column": 3
+    },
+    {
+      "id": "嚣张",
+      "label": "嚣张",
+      "description": "下巴抬高，半眯着眼，嘴角歪斜上扬。",
+      "row": 1,
+      "column": 0
+    },
+    {
+      "id": "得意",
+      "label": "得意",
+      "description": "眼睛弯起，咧嘴偷笑，双爪叉腰。",
+      "row": 1,
+      "column": 1
+    },
+    {
+      "id": "狡黠",
+      "label": "狡黠",
+      "description": "眼神斜瞟，眉毛挑起，露出会心坏笑。",
+      "row": 1,
+      "column": 2
+    },
+    {
+      "id": "挑衅",
+      "label": "挑衅",
+      "description": "吐着舌头，挑起眉毛，用爪子招手。",
+      "row": 1,
+      "column": 3
+    },
+    {
+      "id": "思考",
+      "label": "思考",
+      "description": "爪子托住下巴，眼睛向上看，眉头微皱。",
+      "row": 2,
+      "column": 0
+    },
+    {
+      "id": "疑惑",
+      "label": "疑惑",
+      "description": "眉毛一高一低，嘴巴微张，脑袋稍稍偏斜。",
+      "row": 2,
+      "column": 1
+    },
+    {
+      "id": "紧张",
+      "label": "紧张",
+      "description": "眼神游移，脸颊冒汗，双爪缩在胸前。",
+      "row": 2,
+      "column": 2
+    },
+    {
+      "id": "惊讶",
+      "label": "惊讶",
+      "description": "眼睛瞪圆，嘴巴大张，双爪突然举起。",
+      "row": 2,
+      "column": 3
+    },
+    {
+      "id": "委屈",
+      "label": "委屈",
+      "description": "眼眶湿润，嘴唇撅起，耳朵或肩膀耷拉。",
+      "row": 3,
+      "column": 0
+    },
+    {
+      "id": "沮丧",
+      "label": "沮丧",
+      "description": "目光低垂，嘴角下弯，身体无精打采。",
+      "row": 3,
+      "column": 1
+    },
+    {
+      "id": "愤怒",
+      "label": "愤怒",
+      "description": "眉毛紧锁，咬紧牙齿，双爪攥紧。",
+      "row": 3,
+      "column": 2
+    },
+    {
+      "id": "开心",
+      "label": "开心",
+      "description": "眼睛笑弯，张嘴大笑，双爪欢快地举起。",
+      "row": 3,
+      "column": 3
+    }
+  ],
+  "gameNames": {
+    "xiangqi": "中国象棋",
+    "blind": "覆棋盲棋",
+    "werewolf": "六人狼人杀",
+    "groupchat": "自由群聊",
+    "undercover": "谁是卧底",
+    "liarsdice": "骗子骰子",
+    "codenames": "行动代号",
+    "spyfall": "谍报危机"
+  },
+  "scenes": {
+    "xiangqi": "/assets/presentation/scenes/xiangqi.webp",
+    "blind": "/assets/presentation/scenes/blind.webp",
+    "werewolf-day": "/assets/presentation/scenes/werewolf-day.webp",
+    "werewolf-night": "/assets/presentation/scenes/werewolf-night.webp",
+    "groupchat": "/assets/presentation/scenes/groupchat.webp",
+    "undercover": "/assets/presentation/scenes/undercover.webp",
+    "liarsdice": "/assets/presentation/scenes/liarsdice.webp",
+    "codenames": "/assets/presentation/scenes/codenames.webp",
+    "spyfall": "/assets/presentation/scenes/spyfall.webp"
+  }
+}

@@ -28,7 +28,7 @@ async function browser() {
    return {ok:true,json:async()=>route==='/api/network'?{localOrigin:'http://127.0.0.1:4318',lanOrigins:[]}:route==='/api/matches'?[]:{}};
   }
  });
- for(const file of ['ui.js','app.js'])vm.runInContext(fs.readFileSync(new URL('../public/'+file,import.meta.url),'utf8'),context);
+ for(const file of ['presentation.js','ui.js','app.js'])vm.runInContext(fs.readFileSync(new URL('../public/'+file,import.meta.url),'utf8'),context);
  await new Promise(resolve=>setImmediate(resolve));
  context.room={id:'room',runId:'archived-run',runNumber:2,kind:'xiangqi',title:'中文房间',started:true,paused:false,readOnly:true,
   game:xiangqiView(initialXiangqi()),events:[],history:[],participants:[]};

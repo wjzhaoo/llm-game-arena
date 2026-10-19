@@ -1,3 +1,4 @@
+import {submitAction} from './action-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -52,7 +53,7 @@ test('Remote notification does not claim actions; completion wakes once and game
  await w.instance.step();assert.equal(w.calls.length,1);assert.equal(f.arena.get(id).jobs[0].clientId,null);
  await w.instance.step();assert.equal(w.calls.length,1);
  const identity=f.arena.identity(red.token),job=f.arena.claim(identity).job;
- assert.equal(f.arena.submit(identity,{...job,result:{from:[0,6],to:[0,5]}}).ok,true);
+ assert.equal(submitAction(f.arena,identity,{...job,result:{from:[0,6],to:[0,5]}}).ok,true);
  f.arena.park(identity);f.arena.resign(black);await w.instance.step();await w.instance.step();
  assert.equal(w.calls.length,2);assert.equal(w.instance.stopped,false);assert.equal((await w.instance.step()).completed,true);
  assert.ok(!JSON.stringify(f.arena.public(f.arena.get(id))).includes(red.relayToken));
@@ -146,7 +147,7 @@ test('Downloaded CLI verifies a remote host before consuming invitation and rela
  assert.equal(sent.length,1);assert.equal(sent[0].model,'fixture/model');assert.equal(sent[0].dir,remote);assert.equal(app.arena.get(id).jobs[0].clientId,null);
  const claimed=JSON.parse((await run(process.execPath,[script,'resume','--credential',credential],{cwd:remote,env})).stdout);
  assert.equal(claimed.job.seat,'red');
- const response=path.join(remote,'tmp','response.json');fs.writeFileSync(response,JSON.stringify({from:[0,6],to:[0,5]}));
+ const response=path.join(remote,'tmp','response.json');fs.writeFileSync(response,JSON.stringify({from:[0,6],to:[0,5],state:'平静'}));
  const submitted=JSON.parse((await run(process.execPath,[script,'submit','--credential',credential,'--task',claimed.job.taskId,'--attempt',claimed.job.attemptId,'--file',response],{cwd:remote,env})).stdout);
  assert.equal(submitted.ok,true);assert.equal(app.arena.get(id).game.ply,1);
  app.arena.revoke(id,'red');
