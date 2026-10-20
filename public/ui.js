@@ -73,5 +73,30 @@
   const label=busy||connection.checking?'核验/投递中…':connection.status==='sent'?'已送达 · 待领取':connection.status==='uncertain'?'核验送达':connection.status==='claimed'?'已领取':connection.status==='sending'?'投递中…':'唤醒';
   return {disabled,label,reason:connection.blockedReason||'向已绑定原会话发送待领取任务通知；送达不代表已响应'};
  }
- globalThis.ArenaUI={avatar,chess,werewolfActions,wakeControl,cell,roleNames};
+ function turnIndicators(kind,game,{started=true,paused=false,undoRequest=null,ownSeat=null,ownCanAct=false,replay=false}={}){
+  const turns={};if(!started||paused||game.status==='finished')return turns;
+  const add=(seat,label,mode='active')=>{if(seat)turns[seat]={label:(replay?'回放 · ':seat===ownSeat&&mode!=='collecting'?'轮到你 · ':'')+label,mode}};
+  const living=()=>game.players?.filter(p=>p.alive!==false).map(p=>p.id)||[];
+  if(['xiangqi','blind'].includes(kind)){
+   if(undoRequest)add(undoRequest.responder,'等待确认悔棋','confirming');else add(game.turn,'等待行棋');
+  }else if(kind==='groupchat'){
+   if(game.phase==='speak')add(game.speaker,'等待发言');
+   // Sealed submissions highlight the whole cohort, including after an individual submits.
+   if(game.phase==='bid')for(const seat of game.roster||[])add(seat,'本轮征集意愿','collecting');
+  }else if(['undercover','spyfall','werewolf'].includes(kind)&&game.phase==='vote'){
+   for(const seat of living())add(seat,'秘密投票中','collecting');
+  }else if(kind==='werewolf'){
+   if(game.phase==='discuss')for(const seat of living()){
+    if(!(game.log||[]).some(e=>e.type==='speech'&&e.round===game.round&&e.seat===seat))add(seat,'等待发言');
+   }
+   // Only an authenticated player's own task can identify a night actor.
+   else if(ownCanAct&&['night','wolf','seer','witch'].includes(game.phase))add(ownSeat,'等待夜间行动');
+  }else{
+   const labels={describe:'等待描述',bid:'等待叫点 / 质疑',clue:'等待给出线索',guess:'等待猜词',question:'等待提问',answer:'等待回答'};
+   for(const seat of game.pendingSeats||[])if(labels[game.phase])add(seat,labels[game.phase]);
+  }
+  return turns;
+ }
+ const turnTag=turn=>turn?'<span class="seat-turn-tag">'+esc(turn.label)+'</span>':'';
+ globalThis.ArenaUI={avatar,chess,werewolfActions,wakeControl,turnIndicators,turnTag,cell,roleNames};
 })();

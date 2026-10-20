@@ -55,8 +55,15 @@ test('Groupchat controller replay uses historical membership and exposes no live
  assert.ok(!element('players').innerHTML.includes('后来加入的人'));assert.ok(!element('players').innerHTML.includes('data-profile-seat'));assert.ok(element('players').innerHTML.includes('只读回放'));assert.equal(element('count').textContent,'2 位成员');assert.equal(element('chatAdminTools').hidden,true);
  applyGroupchat(g,'p1',{type:'bid',score:99},{now:100,timeoutMs:10000});room.game=groupchatView(g);
  vm.runInContext('replay=null;render()',ctx);
- assert.ok(element('players').innerHTML.includes('甲</strong><small>本轮征集意愿</small>'));
- assert.ok(element('players').innerHTML.includes('乙</strong><small>本轮征集意愿</small>'));
+ assert.ok(element('players').innerHTML.includes('甲</strong><span class="seat-turn-tag">本轮征集意愿</span>'));
+ assert.ok(element('players').innerHTML.includes('乙</strong><span class="seat-turn-tag">本轮征集意愿</span>'));
+ assert.equal((element('players').innerHTML.match(/player turn-collecting/g)||[]).length,2,'the sealed cohort stays highlighted without identifying who submitted');
  assert.ok(!element('players').innerHTML.includes('后来加入的人</strong><span class="seat-turn-tag">等待提交意愿'));
  assert.ok(!element('board').innerHTML.includes('99'),'unsettled scores remain hidden');
+ applyGroupchat(g,'p2',{type:'bid',score:1},{now:100,timeoutMs:10000,pick:()=>0});room.game=groupchatView(g);
+ vm.runInContext('render()',ctx);
+ assert.equal((element('players').innerHTML.match(/player turn-active/g)||[]).length,1);
+ assert.ok(element('players').innerHTML.includes('甲</strong><span class="seat-turn-tag">等待发言</span>'));
+ room.paused=true;vm.runInContext('render()',ctx);
+ assert.ok(!element('players').innerHTML.includes('seat-turn-tag'),'paused rooms do not claim to be waiting for an action');
 });

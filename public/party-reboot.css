@@ -45,3 +45,15 @@ dialog{background:var(--party-surface);color:var(--party-ink);border:2px solid v
 :root[data-theme] .primary,:root[data-theme] .primary:hover{background:var(--party-yellow);border:2px solid var(--party-line);color:#302449;box-shadow:3px 4px 0 var(--party-line)}.team-score.red b{color:#872b42}.team-score.blue b{color:#204d78}.team-score b{font-weight:850}.party-heading h2{letter-spacing:0;font-family:inherit;font-weight:850}.code-clue>strong>b{background:var(--party-pink);color:var(--party-ink)}
 
 .duel-roster{position:relative}.duel-roster .roster-person{position:static}.duel-roster .duel-vs{left:50%;top:50%;transform:translate(-50%,-50%) rotate(-8deg)}
+
+/* Inset controls and waiting cards keep their borders clear of the panel frame. */
+.lan-bar{padding:10px 12px;gap:12px}.lan-bar label{min-width:0;max-width:100%}.lan-bar select{min-width:0;max-width:100%;min-height:36px}.lan-bar>button{flex-shrink:0}.lan-bar>span{overflow-wrap:anywhere}
+.sidepanel .chat-admin-tools{margin:0;padding:14px 14px 16px;border-bottom:1px dashed var(--border);gap:10px}.sidepanel .chat-admin-tools button{font-size:11px;padding:7px 9px;min-height:34px}
+.sidepanel #players{display:grid;padding:8px;gap:8px}.sidepanel .player{border:1px solid transparent;border-bottom-color:var(--border);border-radius:12px;padding:12px 10px;min-width:0}.sidepanel .player:last-child{border-bottom-color:transparent}
+.sidepanel .player.turn-active,.sidepanel .player.turn-confirming{border:2px solid #d18800;background:#fff1bc;box-shadow:inset 5px 0 0 #ed9b00;padding:11px 9px}
+.sidepanel .player.turn-collecting{border:2px dashed #ab6c05;background:#fff6d9;box-shadow:inset 4px 0 0 #e4aa28;padding:11px 9px}
+.player .seat-turn-tag{display:inline-flex;align-items:center;gap:5px;max-width:100%;padding:4px 7px;border:1px solid #6b4306;border-radius:6px;background:#ffe16b;color:#382607;font-size:11px;font-weight:850;line-height:1.5;margin:6px 0 4px;overflow-wrap:anywhere}
+.player .seat-turn-tag::before{content:'➜';font-size:13px;flex-shrink:0}.player.turn-collecting .seat-turn-tag::before{content:'◷'}
+:root[data-theme=dark] .sidepanel .player.turn-active,:root[data-theme=dark] .sidepanel .player.turn-confirming{background:#514025;border-color:#ffd15c;box-shadow:inset 5px 0 0 #ffd15c}
+:root[data-theme=dark] .sidepanel .player.turn-collecting{background:#40352c;border-color:#d5ad54;box-shadow:inset 4px 0 0 #d5ad54}
+@media(max-width:780px){.lan-bar{padding:10px;gap:10px}.sidepanel #players{padding:8px}.sidepanel .chat-admin-tools{padding:12px}.player .seat-turn-tag{font-size:10px}}
