@@ -163,14 +163,15 @@ test('Pause cancels an in-flight host read before delivery and explicit resume r
  await Promise.all(wake.tick({force:true}));assert.equal(calls,1);assert.equal(f.arena.get(id).jobs[0].wakeNotice.status,'sent');
 });
 
-test('All six Werewolf connections and simultaneous player deadlines remain independent of admin task attention',t=>{
+test('All six Werewolf connections and simultaneous player deadlines continue after explicit recovery from repeated timeouts',t=>{
  const {arena,clock}=fixture(t),id=arena.create({kind:'werewolf',timeoutSeconds:10}).id,ids=connectAll(arena,id);arena.start(id);
+ let pauses=0;const expire=()=>{clock.now+=10000;arena.tick();for(let i=0;i<6&&arena.get(id).paused;i++){pauses++;arena.resume(id);arena.tick()}};
  const initial=arena.get(id).jobs.filter(j=>j.status==='open');assert.equal(initial.length,2);
- clock.now+=10000;arena.tick();assert.equal(arena.get(id).game.phase,'seer');assert.equal(arena.adminView(id).tasks.length,2);
- clock.now+=10000;arena.tick();assert.equal(arena.get(id).game.phase,'witch');
- clock.now+=10000;arena.tick();assert.equal(arena.get(id).game.phase,'discuss');assert.equal(arena.get(id).jobs.filter(j=>j.status==='open').length,6);
- clock.now+=10000;arena.tick();assert.equal(arena.get(id).game.phase,'vote');
- clock.now+=10000;arena.tick();assert.equal(arena.get(id).game.round,2);assert.equal(arena.get(id).game.phase,'wolf');
+ expire();assert.equal(arena.get(id).game.phase,'seer');assert.equal(arena.adminView(id).tasks.length,2);
+ expire();assert.equal(arena.get(id).game.phase,'witch');
+ expire();assert.equal(arena.get(id).game.phase,'discuss');assert.equal(arena.get(id).jobs.filter(j=>j.status==='open').length,6);
+ expire();assert.equal(arena.get(id).game.phase,'vote');
+ expire();assert.equal(arena.get(id).game.round,2);assert.equal(arena.get(id).game.phase,'wolf');
  assert.equal(arena.adminView(id).tasks.length,16);assert.equal(arena.get(id).paused,false);assert.equal(arena.get(id).game.players.filter(p=>p.alive).length,6);
- assert.equal(Object.keys(ids).length,6);noJudge(arena,id);
+ assert.ok(pauses>0);assert.equal(Object.keys(ids).length,6);noJudge(arena,id);
 });

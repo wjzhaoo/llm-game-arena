@@ -1,0 +1,64 @@
+/* Shared public action cards. Keep controls and private information in their own panels. */
+.character-action{min-width:0;width:100%;text-align:left;padding:10px 12px;border:1px solid var(--border);border-radius:12px;background:var(--party-soft);color:var(--party-ink);overflow-wrap:anywhere;box-sizing:border-box}
+.character-action.latest{border-color:var(--party-line);box-shadow:inset 3px 0 var(--party-pink)}
+.action-meta{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:6px;flex-wrap:wrap}
+.character-action .action-meta small,.action-meta>span,.character-action .action-empty{font-size:10px;color:var(--party-muted);max-width:none;margin:0}
+.action-meta>span{color:var(--party-ink);font-weight:700}
+.character-action .action-summary{font-size:13px;line-height:1.5;letter-spacing:0;display:block}
+.action-waiting{display:block;font-size:11px;font-weight:700;border-radius:6px;padding:4px 7px;background:var(--party-mint);color:var(--party-ink);margin-bottom:8px}
+.action-speech{margin-top:7px;font-size:12px;line-height:1.65}
+.action-speech summary{cursor:pointer;list-style:none}
+.action-speech summary::-webkit-details-marker{display:none}
+.action-preview{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden;white-space:pre-wrap}
+.action-expand,.action-collapse{font-size:10px;text-decoration:underline;display:block;margin-top:4px;color:var(--party-muted)}
+.action-collapse,.action-speech[open] .action-preview,.action-speech[open] .action-expand{display:none}
+.action-speech[open] .action-collapse{display:block}
+.action-speech p{margin:6px 0 0;white-space:pre-wrap;font-size:12px;line-height:1.65;color:inherit}
+.action-speech summary:focus-visible{outline:2px solid var(--party-line);outline-offset:4px;border-radius:4px}
+.party-seats,.liarsdice .party-seats{grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));align-items:start}
+.party-seat{align-content:start}
+.party-person{display:flex;flex-direction:column;align-items:center;gap:7px;min-width:0}
+.party-seat .character-action{margin:4px 0}
+.character-roster{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));align-items:start;gap:12px;padding:16px}
+.character-roster .roster-person{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;min-width:0;gap:10px}
+.roster-person>.character-action{grid-column:1/-1}
+.character-roster .duel-vs{display:none}
+.scene-banner.compact{height:88px;min-height:0;padding:12px 18px}
+.scene-banner.compact h2{font-size:21px;margin:3px 0}
+.scene-banner.compact p,.scene-banner.compact .comic-kicker,.scene-banner.compact .scene-spark{display:none}
+.party-scene .dice-pot{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 16px;padding:12px 16px;margin:0 0 16px;min-height:0;text-align:left}
+.dice-pot>.table-label{letter-spacing:0}
+.dice-pot .current-bid{display:flex;align-items:center;gap:10px;margin:0}
+.dice-pot .current-bid>span{font-size:12px;color:var(--party-muted);margin:0}
+.dice-pot .current-bid strong{display:flex;align-items:center;gap:7px;font-size:25px;line-height:1.2;margin:0;min-height:0}
+.dice-pot .current-bid small{font-size:13px;color:var(--party-muted)}
+.dice-pot .current-bid .party-die{transform:none;margin:0;width:30px;height:30px;flex-basis:30px}
+.dice-pot>p{margin:0;font-size:12px;line-height:1.5}
+.party-scene .party-callout,.party-scene .spy-dossier{padding:12px 16px;margin:0 0 16px;min-height:0}
+.party-scene .party-callout h2{display:none}
+.party-scene .spy-dossier h2{font-size:18px;margin:5px 0!important;letter-spacing:0}
+.party-callout p,.spy-dossier p{margin:6px 0}
+.spy-dossier .dossier-stamp{display:none}
+.spy-dossier .mission-progress{margin:8px 0}
+.party-result{padding:10px 16px;margin:0 0 14px;display:flex;justify-content:center;align-items:center;gap:12px;flex-wrap:wrap}
+.party-result strong{font-size:18px;margin:0}
+.party-result span{letter-spacing:0}
+.party-log>summary{cursor:pointer;font-size:12px;color:var(--party-muted)}
+.ww-stage .ww-action-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;max-width:none;min-height:0;aspect-ratio:auto;background:none;align-items:start;padding:8px 0}
+.ww-action-grid .ww-table,.ww-stage.ww-night .ww-action-grid:before{display:none}
+.ww-action-grid .ww-seat{position:relative;left:auto!important;top:auto!important;transform:none;width:auto;min-width:0;max-width:none;box-sizing:border-box}
+.ww-action-grid .ww-seat>.character-action{margin-top:10px}
+.ww-action-grid .ww-seat>small{max-width:none}
+.ww-action-grid .ww-seat.dead{opacity:.8;filter:none}
+@media(max-width:1000px){.ww-stage .ww-action-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){
+ .party-seats,.liarsdice .party-seats,.character-roster{grid-template-columns:1fr}
+ .party-seat{padding:12px}
+ .party-person{flex-direction:row;align-self:flex-start;gap:12px}
+ .party-person .character-avatar{flex-direction:row;gap:8px}
+ .party-scene .dice-pot{align-items:flex-start;gap:8px}
+ .dice-pot>.table-label,.dice-pot>p{flex-basis:100%}
+ .ww-stage .ww-action-grid{grid-template-columns:1fr}
+ .scene-banner.compact{height:68px;padding:10px 14px}
+ .scene-banner.compact h2{font-size:18px}
+}

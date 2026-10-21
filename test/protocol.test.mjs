@@ -25,7 +25,7 @@ test('Werewolf public events carry structured seat, deaths, votes and result fie
  const vote=a.get(id).events.find(e=>e.type==='vote');
  assert.equal(vote.round,1);assert.equal(vote.seat,target);assert.equal(Object.keys(vote.votes).length,5);
  assert.ok(a.get(id).history.some(h=>h.type==='dawn'&&Array.isArray(h.deaths)),'history snapshots carry the same fields');
- for(let i=0;i<400&&a.get(id).game.status!=='finished';i++){clock.now+=11000;a.tick()}
+ for(let i=0;i<400&&a.get(id).game.status!=='finished';i++){clock.now+=11000;a.tick();if(a.get(id).paused)a.resume(id)}
  const result=a.get(id).events.find(e=>e.type==='result');
  assert.ok(result&&'winner' in result&&typeof result.reason==='string','finished matches publish a structured result');
 });

@@ -30,15 +30,14 @@
  }
  function stage(game,participants,manifest,options={}){
   const night=nightPhase(game?.phase),players=game?.players||[];
-  const {speaking=null,lastSpeech=null,poppedId=null}=options;
+  const {speaking=null}=options;
   const roleName=role=>globalThis.ArenaUI?.roleNames?.[role]||role;
   const seats=players.map((p,i)=>{
    const participant=(participants||[]).find(item=>item.seat===p.id);
    const avatar=globalThis.ArenaPresentation?.avatar(participant||{seat:p.id})||'<span class="provider-avatar">'+esc(p.id)+'</span>';
-   return '<div class="ww-seat'+(p.alive?'':' dead')+(speaking===p.id?' speaking':'')+'" data-seat="'+esc(p.id)+'" style="'+seatPosition(i,players.length)+'" aria-label="'+esc(p.id)+' 号玩家，'+esc(p.role?roleName(p.role):'身份隐藏')+'，'+(p.alive?'存活':'已出局')+'"><div class="seat-avatar">'+avatar+'</div><strong>'+esc(participant?.nickname||(globalThis.ArenaPresentation?.seat(p.id)||p.id)+'玩家')+'</strong><small>'+esc(p.id)+' 号 · '+esc(p.role?roleName(p.role):'身份隐藏')+' · '+(p.alive?'存活':'已出局')+'</small></div>';
+   return '<div class="ww-seat'+(p.alive?'':' dead')+(speaking===p.id?' speaking':'')+'" data-seat="'+esc(p.id)+'" style="'+seatPosition(i,players.length)+'" aria-label="'+esc(p.id)+' 号玩家，'+esc(p.role?roleName(p.role):'身份隐藏')+'，'+(p.alive?'存活':'已出局')+'"><div class="seat-avatar">'+avatar+'</div><strong>'+esc(participant?.nickname||(globalThis.ArenaPresentation?.seat(p.id)||p.id)+'玩家')+'</strong><small>'+esc(p.id)+' 号 · '+esc(p.role?roleName(p.role):'身份隐藏')+' · '+(p.alive?'存活':'已出局')+'</small>'+(globalThis.ArenaPresentation?.actionCard(participant||{seat:p.id},{...options,people:participants})||'')+'</div>';
   }).join('');
-  const bubble=lastSpeech?'<div class="ww-bubble'+(lastSpeech.id!==poppedId?' pop':'')+'" title="'+esc(lastSpeech.text)+'"><b>'+esc(lastSpeech.seat)+' 发言</b><span>'+esc(cut(lastSpeech.text,140))+'</span></div>':'';
-  return '<div class="ww-stage'+(night?' ww-night':'')+'"><div class="ww-banner'+(night?' night':'')+'">'+(night?'天黑请闭眼 · 私有行动仅对应角色可见':'天亮了 · 请根据公开线索讨论与投票')+'<small>普通观战不显示隐藏角色、夜间目标或验人结果</small></div><div class="ww-arena"><div class="ww-table" aria-hidden="true"></div>'+seats+'<div class="ww-spotlight">'+bubble+'</div></div></div>';
+  return '<div class="ww-stage'+(night?' ww-night':'')+'"><div class="ww-banner'+(night?' night':'')+'">'+(night?'天黑请闭眼 · 私有行动仅对应角色可见':'天亮了 · 请根据公开线索讨论与投票')+'<small>普通观战不显示隐藏角色、夜间目标或验人结果</small></div><div class="ww-arena ww-action-grid"><div class="ww-table" aria-hidden="true"></div>'+seats+'</div></div>';
  }
  function freshEvents(seen,events){return (events||[]).filter(e=>!(seen&&typeof seen.has==='function'&&seen.has(eventKey(e))))}
  // 新事件 → 演出指令；昼夜切换指令置于最前

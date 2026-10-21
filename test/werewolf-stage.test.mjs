@@ -23,7 +23,7 @@ test('seatPosition places p1 at the top and spaces six seats around the table', 
  assert.equal(w.seatPosition(3), 'left:50.00%;top:86.00%');
 });
 
-test('stage renders six seats with dead/speaking state and escapes the speech bubble', () => {
+test('stage places escaped public speech inside the speaking character card', () => {
  const w = werewolf(), g = game();
  let html = w.stage(g, participants, {}, {});
  assert.equal((html.match(/data-seat="p\d"/g) || []).length, 6);
@@ -31,13 +31,15 @@ test('stage renders six seats with dead/speaking state and escapes the speech bu
  assert.ok(!html.includes('speaking'));
  assert.equal((html.match(/aria-label="猫 · 无辜"/g)||[]).length,6,'humans and models use the same animal/state avatars');
  const speech = {id: 'e1', seat: 'p2', text: 'p3 是狼 <script>alert(1)</script>'};
- html = w.stage(g, participants, {}, {speaking: 'p2', lastSpeech: speech, poppedId: null});
+ const actions={p2:{id:'e1:0',seat:'p2',summary:'公开发言',speech:speech.text,round:2,latest:true}};
+ html = w.stage(g, participants, {}, {speaking: 'p2', actions});
  assert.ok(html.includes('ww-seat speaking'));
- assert.ok(html.includes('ww-bubble pop'), 'a new speech pops once');
+ assert.ok(html.includes('data-action-seat="p2"'), 'speech belongs to p2');
+ assert.ok(!html.includes('ww-spotlight'), 'no detached central speech bubble');
  assert.ok(!html.includes('<script>'), 'speech text is escaped');
  assert.ok(html.includes('&lt;script&gt;'));
- html = w.stage(g, participants, {}, {speaking: 'p2', lastSpeech: speech, poppedId: 'e1'});
- assert.ok(html.includes('ww-bubble') && !html.includes('ww-bubble pop'), 'the same speech never pops twice');
+ html = w.stage(g, participants, {}, {speaking: 'p2', actions});
+ assert.ok(html.includes('data-action-id="e1:0"'), 'stable action survives rendering');
  html = w.stage(game({phase: 'night'}), participants, {}, {});
  assert.ok(html.includes('ww-night') && html.includes('天黑请闭眼'));
 });

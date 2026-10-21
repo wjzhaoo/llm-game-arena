@@ -189,7 +189,7 @@ test('simulated model observes fixed visual cues and latest 12 public transition
  const f=fixture('groupchat');let observed;
  const simulatedModel=job=>{observed=job.view;return {type:'bid',score:0,state:job.view.participants.some(p=>p.state==='嚣张')?'思考':'平静'}};
  for(let round=0;round<7;round++){
-  act(f,'p1',{type:'bid',score:100},round%2?'嚣张':'真诚');act(f,'p2',{type:'bid',score:0},round%2?'疑惑':'开心');act(f,'p1',{type:'speak',text:'公开发言。'},'平静');
+  act(f,'p1',{type:'bid',score:100},round%2?'嚣张':'真诚');act(f,'p2',{type:'bid',score:1},round%2?'疑惑':'开心');act(f,'p1',{type:'speak',text:'公开发言。'},'平静');
  }
  const job=f.a.claim(f.ids.p2).job,result=simulatedModel(job);assert.equal(observed.recentStateChanges.length,12);
  assert.deepEqual(observed.stateCatalog.map(s=>s.id),STATES.map(s=>s.id));assert.match(observed.stateCatalog.find(s=>s.id==='嚣张').description,/下巴/);

@@ -5,6 +5,14 @@ import vm from 'node:vm';
 import {initialGroupchat,addChatMember,beginChatRound,applyGroupchat,groupchatView,CHAT_EMOTES} from '../lib/groupchat.mjs';
 function ui(){const ctx={Date,Map,globalThis:null};ctx.globalThis=ctx;vm.runInNewContext(fs.readFileSync(new URL('../public/ui.js',import.meta.url),'utf8'),ctx);vm.runInNewContext(fs.readFileSync(new URL('../public/groupchat.js',import.meta.url),'utf8'),ctx);return ctx.ArenaGroupchat}
 function game(){const g=initialGroupchat({topic:'<script>话题</script>'});for(const nickname of ['甲','乙']){const p=addChatMember(g,{type:'human',nickname,profile:{personality:'PRIVATE'}});p.connected=true}beginChatRound(g,{now:100,timeoutMs:10000});return g}
+
+test('automatic discussion stops show the actual reason instead of claiming everyone abstained',()=>{
+ const u=ui(),g=game();g.phase='idle';
+ for(const [reason,text] of [['solo-limit','连续 5 轮'],['round-limit','已满 40 轮']]){
+  g.idleReason=reason;const html=u.stage(groupchatView(g),{started:true});
+  assert.ok(html.includes(text));assert.ok(html.includes('主动发起下一轮'));assert.ok(!html.includes('全员弃权'));
+ }
+});
 test('Groupchat public stage escapes content, shows closed ballots and never renders private profiles',()=>{
  const u=ui(),g=game();applyGroupchat(g,'p1',{type:'bid',score:99},{now:100,timeoutMs:10000});
  let html=u.stage(groupchatView(g),{started:true});assert.ok(html.includes('1 / 2'));assert.ok(!html.includes('99'));assert.ok(html.includes('&lt;script&gt;'));assert.ok(!html.includes('PRIVATE'));

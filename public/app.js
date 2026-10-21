@@ -474,7 +474,9 @@ function render(){
  $('arenaGrid').className='arena-grid';$('connectionsPanel').hidden=false;
  const g=replay===null?(partyKind(match.kind)&&playerData?playerData.privateView:match.game):(match.history[replay]?.game||match.game),finished=match.game.status==='finished';
  const stagePeople=replay===null?match.participants:(g.participants||match.history[replay]?.eventPeople||(g.members||match.participants).map(p=>({...p,animalId:null,state:null})));
- const sceneHtml=ArenaPresentation.scene(match.kind,{phase:g.phase});setHTML($('sceneBanner'),sceneHtml);const rosterHtml=['xiangqi','blind'].includes(match.kind)?ArenaPresentation.roster(stagePeople,{duel:true}):['groupchat','codenames'].includes(match.kind)?ArenaPresentation.roster(stagePeople):'';setHTML($('stageRoster'),rosterHtml);
+ ArenaPresentation.setActionContext(match.id+':'+match.runId);
+ const actions=ArenaPresentation.recentActions(replay===null?match.events:match.history.slice(0,replay+1));
+ const sceneHtml=ArenaPresentation.scene(match.kind,{phase:g.phase,compact:true});setHTML($('sceneBanner'),sceneHtml);
  const focused=document.activeElement,focusCell=focused?.dataset?.cell,focusTarget=focused?.dataset?.target;
  $('title').textContent=match.title;$('subtitle').textContent=kinds[match.kind]+(match.kind==='groupchat'?' · 自由讨论 · 意愿决定发言':' · 真人与 AI 同席 · 规则引擎校验');
  $('status').textContent=historical()?'历史记录 · 只读':match.kind==='groupchat'?(g.status==='finished'?'聊天已结束':match.paused?'房主已暂停':match.started?'讨论中':'等待成员'):match.paused?'房主已暂停':g.status==='finished'?'已结束 · '+(partyKind(match.kind)?({civilians:'平民胜',undercover:'卧底胜',red:'红队胜',blue:'蓝队胜',spy:'间谍胜',agents:'普通玩家胜'}[g.winner]||(g.winner?ArenaParty.label(g.winner,match.participants)+' 获胜':'未分胜负')):(g.winner||'平局')):match.started?'正在进行':'等待选手';
@@ -486,6 +488,7 @@ function render(){
  $('live').textContent=historical()?'◷ ARCHIVE':replay===null?'● LIVE':'◷ REPLAY';
  const viewingHistory=historical()||replay!==null;
  const turns=ArenaUI.turnIndicators(match.kind,g,{started:frame?.started??match.started,paused:frame?.paused??match.paused,undoRequest:frame?.undoRequest,ownSeat:viewingHistory?null:playerData?.seat,ownCanAct:!viewingHistory&&!!playerData?.privateView.self?.canAct,replay:viewingHistory});
+ const rosterHtml=['xiangqi','blind'].includes(match.kind)?ArenaPresentation.roster(stagePeople,{duel:true,actions,turns}):['groupchat','codenames'].includes(match.kind)?ArenaPresentation.roster(stagePeople,{actions,turns}):'';setHTML($('stageRoster'),rosterHtml);
  $('exportButton').disabled=exporting;
  $('startButton').disabled=viewingHistory||!admin||match.started||finished||(match.kind==='groupchat'?match.participants.filter(p=>p.connected).length<2:match.participants.some(p=>!p.connected));
  $('pauseButton').disabled=viewingHistory||!admin||!match.started||finished;$('pauseButton').textContent=match.paused?'继续比赛':'暂停比赛';
@@ -500,7 +503,7 @@ function render(){
   renderChatStage(g);
  }else if(partyKind(match.kind)){
   if(chessStage){chessStage.destroy();chessStage=null}if(ww.room){wwPlayer().reset();ww.room=null}
-  $('board').className='party-board';setHTML($('board'),ArenaParty.stage(g,stagePeople,{started:match.started,canAct:!!humanJob&&!match.paused&&!viewingHistory}));
+  $('board').className='party-board';setHTML($('board'),ArenaParty.stage(g,stagePeople,{actions,turns,paused:frame?.paused??match.paused,started:frame?.started??match.started,canAct:!!humanJob&&!match.paused&&!viewingHistory}));
  }else if(match.kind!=='werewolf'){
   if(ww.room){wwPlayer().reset();ww.room=null;ww.seen=null;ww.prevPhase=null;ww.poppedId=null}
   const context=chatKey()+':'+replay+':'+g.ply+':'+match.boardRevision+':'+(match.undoRequest?.id||'');
@@ -531,7 +534,7 @@ function render(){
    }
    if(lastSpeech)ww.poppedId=lastSpeech.id;
   }else wwPlayer().reset();
-  $('board').innerHTML=ArenaWerewolf.stage(g,stagePeople,avatarManifest,{speaking,lastSpeech,poppedId:replay===null?poppedBefore:(lastSpeech?.id??null)});
+  setHTML($('board'),ArenaWerewolf.stage(g,stagePeople,avatarManifest,{actions,turns,speaking}));
  }
  $('chatAdminTools').hidden=match.kind!=='groupchat'||viewingHistory;if(match.kind==='groupchat'){$('chatAddAI').hidden=!admin;$('chatAddAI').disabled=finished||viewingHistory;$('chatJoin').hidden=!!credential();$('chatJoin').disabled=finished||viewingHistory||(!admin&&!stored('arenaJoin:'+current));$('chatRestart').hidden=!admin;$('chatRestart').disabled=finished||match.paused||!match.started||match.game.phase!=='idle'||match.participants.filter(p=>p.connected).length<2}
  const participants=stagePeople;
@@ -544,8 +547,10 @@ function render(){
  }).join('');setHTML($('players'),playerHtml);
  $('adminTasks').hidden=!match.admin||viewingHistory;const tasks=match.admin?.tasks||[],pending=tasks.filter(t=>t.status==='pending'),resolved=tasks.filter(t=>t.status!=='pending');
  const taskHtml=t=>'<div class="admin-task"><span>'+esc(t.details||t.message||'系统异常')+'<small>'+esc(({pending:'待处理',retried:'已允许重试',resolved:'已解决',closed:'已关闭'})[t.status])+(t.resolution?' · '+esc(t.resolution):'')+'</small></span>'+(t.canRetry&&!viewingHistory?'<button data-retry-task="'+esc(t.id)+'">允许一次重试</button>':'')+'</div>';
- $('taskList').innerHTML=pending.length?pending.map(taskHtml).join(''):'<p class="muted">暂无待处理异常</p>';
- $('taskCount').textContent=pending.length?'待处理 '+pending.length:'暂无待处理';$('resolvedTasks').hidden=!resolved.length;$('resolvedTaskSummary').textContent='已处理记录（'+resolved.length+'）';$('resolvedTaskList').innerHTML=resolved.slice().reverse().map(taskHtml).join('');renderFolds(pending.length);
+ const connectionPause=match.admin?.connectionPause;
+ const pauseNotice=connectionPause?taskHtml({status:'pending',details:seatTitle(connectionPause.seat)+' 连续任务超时：'+connectionPause.reason+'。整桌已暂停，请检查连接和原会话后点击继续。'+(connectionPause.wakeError?' 唤醒错误：'+connectionPause.wakeError:'')}):'';
+ $('taskList').innerHTML=pauseNotice+(pending.length?pending.map(taskHtml).join(''):pauseNotice?'':'<p class="muted">暂无待处理异常</p>');
+ $('taskCount').textContent=connectionPause?'连接异常 · 已暂停':pending.length?'待处理 '+pending.length:'暂无待处理';$('resolvedTasks').hidden=!resolved.length;$('resolvedTaskSummary').textContent='已处理记录（'+resolved.length+'）';$('resolvedTaskList').innerHTML=resolved.slice().reverse().map(taskHtml).join('');renderFolds(pending.length+(connectionPause?1:0));
  const events=replay===null?match.events:match.history.slice(0,replay+1);
  $('events').innerHTML=events.slice().reverse().map(e=>'<div class="event '+esc(e.type)+'"><time>'+new Date(e.at).toLocaleTimeString('zh-CN',{hour12:false})+'</time><span>'+((e.seat||e.party?.seat)?ArenaPresentation.avatar((e.eventPeople||[]).find(p=>p.seat===(e.seat||e.party?.seat))||{seat:e.seat||e.party?.seat},{size:'tiny'}):'')+esc(e.text)+'</span></div>').join('');
  renderStatePicker();renderPlayerPanel();
